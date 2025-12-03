@@ -18,20 +18,12 @@ app = FastAPI(
 )
 
 # CORS middleware
-allowed_origins = [
-    settings.FRONTEND_URL,
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
-
-# Also allow all Vercel preview/production URLs
-if settings.ENVIRONMENT == "production":
-    allowed_origins.append("https://*.vercel.app")
-
+# Allow all origins since we're using JWT tokens in localStorage (not cookies)
+# This enables Vercel preview deployments and other frontends to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in production for Vercel
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins for flexibility
+    allow_credentials=False,  # Set to False when using allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
