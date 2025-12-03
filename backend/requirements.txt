@@ -21,6 +21,7 @@ email-validator==2.1.0
 # AI/LLM
 openai==1.10.0
 anthropic==0.17.0
+google-generativeai==0.3.2
 
 # File handling
 boto3==1.34.34

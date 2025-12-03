@@ -17,6 +17,11 @@ class AIService:
             import anthropic
             self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
             self.model = "claude-3-opus-20240229"
+        elif self.provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.client = genai.GenerativeModel('gemini-2.5-flash')
+            self.model = "gemini-2.5-flash"
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
 
@@ -195,6 +200,64 @@ Provide a concise, structured summary in markdown format.
 
         except Exception as e:
             return f"Error generating summary: {str(e)}"
+
+    def chat(self, messages: list[Dict[str, str]], system_prompt: Optional[str] = None) -> str:
+        """
+        Generate AI chat response from conversation history
+
+        Args:
+            messages: List of {"role": "user"|"assistant", "content": str}
+            system_prompt: Optional system prompt to set behavior
+
+        Returns:
+            AI response string
+        """
+        try:
+            if self.provider == "openai":
+                chat_messages = []
+                if system_prompt:
+                    chat_messages.append({"role": "system", "content": system_prompt})
+                chat_messages.extend(messages)
+
+                response = self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",  # Faster for chat
+                    messages=chat_messages,
+                    temperature=0.7,
+                )
+                return response.choices[0].message.content
+
+            elif self.provider == "anthropic":
+                response = self.client.messages.create(
+                    model="claude-3-haiku-20240307",  # Faster for chat
+                    max_tokens=1024,
+                    system=system_prompt or "You are a helpful patent drafting assistant.",
+                    messages=messages,
+                )
+                return response.content[0].text
+
+            elif self.provider == "gemini":
+                # Gemini uses a different format - need to convert messages
+                # Build conversation history in Gemini format
+                history = []
+                for msg in messages[:-1]:  # All but the last message
+                    history.append({
+                        "role": "user" if msg["role"] == "user" else "model",
+                        "parts": [msg["content"]]
+                    })
+
+                # Start chat with history
+                chat = self.client.start_chat(history=history)
+
+                # Send the latest message and get response
+                if messages:
+                    latest_message = messages[-1]["content"]
+                    response = chat.send_message(latest_message)
+                    return response.text
+                else:
+                    return "No message provided"
+
+        except Exception as e:
+            raise Exception(f"Chat generation failed: {str(e)}")
 
 
 # Global AI service instance

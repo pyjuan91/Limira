@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     # AI Services
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
-    PRIMARY_LLM_PROVIDER: str = "openai"  # openai or anthropic
+    GEMINI_API_KEY: Optional[str] = None
+    PRIMARY_LLM_PROVIDER: str = "openai"  # openai, anthropic, or gemini
 
     # File Storage
     AWS_ACCESS_KEY_ID: Optional[str] = None

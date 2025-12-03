@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, disclosures, drafts, comments, files, users
+from app.api.v1.endpoints import auth, disclosures, drafts, comments, files, users, chat
 
 # Create main API router
 api_router = APIRouter()
@@ -11,3 +11,4 @@ api_router.include_router(disclosures.router, prefix="/disclosures", tags=["Disc
 api_router.include_router(drafts.router, prefix="/drafts", tags=["Patent Drafts"])
 api_router.include_router(comments.router, prefix="/comments", tags=["Comments"])
 api_router.include_router(files.router, prefix="/files", tags=["Files"])
+api_router.include_router(chat.router, prefix="/chat", tags=["AI Chat"])

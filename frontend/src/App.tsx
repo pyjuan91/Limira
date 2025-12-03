@@ -10,6 +10,7 @@ import Signup from '@/pages/auth/Signup'
 import InventorDashboard from '@/pages/inventor/Dashboard'
 import NewDisclosure from '@/pages/inventor/NewDisclosure'
 import LawyerDashboard from '@/pages/lawyer/Dashboard'
+import LawyerDisclosureDetail from '@/pages/lawyer/DisclosureDetail'
 
 // Protected route component
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: UserRole[] }) => {
@@ -91,6 +92,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={[UserRole.LAWYER, UserRole.ADMIN]}>
               <LawyerDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/lawyer/disclosure/:id"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.LAWYER, UserRole.ADMIN]}>
+              <LawyerDisclosureDetail />
             </ProtectedRoute>
           }
         />

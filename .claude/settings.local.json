@@ -17,7 +17,8 @@
       "Bash(python:*)",
       "Bash(curl:*)",
       "Bash(pip install:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

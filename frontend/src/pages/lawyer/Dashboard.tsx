@@ -141,7 +141,11 @@ export default function LawyerDashboard() {
         ) : (
           <div className="grid gap-5">
             {disclosures.map((disclosure) => (
-              <div key={disclosure.id} className="card-hover">
+              <div
+                key={disclosure.id}
+                className="card-hover cursor-pointer"
+                onClick={() => navigate(`/lawyer/disclosure/${disclosure.id}`)}
+              >
                 <div className="flex justify-between items-start gap-6">
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-3">
@@ -166,9 +170,12 @@ export default function LawyerDashboard() {
                     </div>
                     {(disclosure.status === DisclosureStatus.READY_FOR_REVIEW ||
                       disclosure.status === DisclosureStatus.IN_REVIEW) && (
-                      <button className="mt-4 bg-navy-700 hover:bg-navy-800 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 hover:scale-[1.02] active:scale-95">
-                        Review Draft
-                      </button>
+                      <div className="mt-4 inline-flex items-center gap-2 bg-navy-700 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group-hover:bg-navy-800">
+                        <span>Review Draft</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
                     )}
                   </div>
                 </div>
