@@ -4,13 +4,10 @@ from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.api.v1.router import api_router
 from app.models.user import User, UserRole
-from passlib.context import CryptContext
+from app.core.security import get_password_hash
 
 # Database tables are managed by Alembic migrations
 # Run: alembic upgrade head
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -58,7 +55,7 @@ async def create_test_users():
             # Create inventor test account
             inventor = User(
                 email='inventor@test.com',
-                hashed_password=pwd_context.hash('password123'),
+                hashed_password=get_password_hash('password123'),
                 role=UserRole.INVENTOR,
                 full_name='John Inventor',
                 company='Tech Innovations Inc'
@@ -70,7 +67,7 @@ async def create_test_users():
             # Create attorney test account
             attorney = User(
                 email='attorney@test.com',
-                hashed_password=pwd_context.hash('password123'),
+                hashed_password=get_password_hash('password123'),
                 role=UserRole.LAWYER,
                 full_name='Sarah Attorney',
                 company='IP Law Firm'
