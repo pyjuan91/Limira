@@ -71,18 +71,22 @@ class RoleChecker:
     Dependency class to check if user has required role(s)
 
     Usage:
-        @app.get("/admin/users", dependencies=[Depends(RoleChecker(["ADMIN"]))])
+        @app.get("/admin/users", dependencies=[Depends(RoleChecker([UserRole.ADMIN]))])
         def get_users():
             ...
     """
 
-    def __init__(self, allowed_roles: list[str]):
-        self.allowed_roles = allowed_roles
+    def __init__(self, allowed_roles: list):
+        # Convert to list of strings for comparison
+        self.allowed_roles = [str(role) if hasattr(role, 'value') else role for role in allowed_roles]
 
     def __call__(self, user: User = Depends(get_current_active_user)):
-        if user.role not in self.allowed_roles:
+        # Convert user.role to string for comparison
+        user_role_str = str(user.role.value) if hasattr(user.role, 'value') else str(user.role)
+
+        if user_role_str not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
+                detail=f"Insufficient permissions. Required roles: {self.allowed_roles}, user has: {user_role_str}",
             )
         return user
