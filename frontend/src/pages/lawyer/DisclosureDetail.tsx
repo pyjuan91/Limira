@@ -456,7 +456,7 @@ export default function LawyerDisclosureDetail() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-medium text-neutral-700">Discussion</h2>
                   <span className="text-xs text-neutral-400">
-                    • {disclosure?.user_name || 'Inventor'}
+                    • with Inventor
                   </span>
                 </div>
               </div>
