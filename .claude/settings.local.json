@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(uv:*)",
+      "Bash(python3:*)",
+      "Bash(psql:*)",
+      "Bash(brew install:*)",
+      "Bash(brew services start:*)",
+      "Bash(export PATH=\"/opt/homebrew/opt/postgresql@15/bin:$PATH\")",
+      "Bash(source .venv/bin/activate)",
+      "Bash(alembic revision:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(uvicorn:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(pip install:*)",
+      "Bash(lsof:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

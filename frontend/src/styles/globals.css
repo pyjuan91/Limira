@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 font-sans;
+    letter-spacing: -0.011em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /* Apple-style buttons */
+  .btn-primary {
+    @apply bg-primary-600 text-white px-6 py-3 rounded-xl font-medium
+           hover:bg-primary-700 active:scale-95
+           transition-all duration-200 ease-out
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .btn-secondary {
+    @apply bg-neutral-100 text-neutral-900 px-6 py-3 rounded-xl font-medium
+           hover:bg-neutral-200 active:scale-95
+           transition-all duration-200 ease-out
+           disabled:opacity-40 disabled:cursor-not-allowed;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  }
+
+  .btn-ghost {
+    @apply text-neutral-700 px-6 py-3 rounded-xl font-medium
+           hover:bg-neutral-100 active:scale-95
+           transition-all duration-200 ease-out
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* Apple-style inputs */
+  .input-field {
+    @apply w-full px-4 py-3
+           bg-white border border-neutral-200 rounded-xl
+           text-neutral-900 placeholder:text-neutral-400
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-all duration-200;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  }
+
+  .input-field:focus {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  /* Apple-style cards */
+  .card {
+    @apply bg-white rounded-2xl p-6
+           border border-neutral-100
+           transition-all duration-200;
+    box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.08);
+  }
+
+  .card:hover {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .card-hover {
+    @apply card cursor-pointer
+           hover:scale-[1.01] active:scale-[0.99];
+  }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
+           border backdrop-blur-sm;
+  }
+
+  .badge-draft {
+    @apply bg-neutral-100 text-neutral-700 border-neutral-200;
+  }
+
+  .badge-processing {
+    @apply bg-primary-50 text-primary-700 border-primary-200;
+  }
+
+  .badge-ready {
+    @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+  }
+
+  .badge-approved {
+    @apply bg-blue-50 text-blue-700 border-blue-200;
+  }
+
+  .badge-revision {
+    @apply bg-amber-50 text-amber-700 border-amber-200;
+  }
+
+  /* Apple-style divider */
+  .divider {
+    @apply border-t border-neutral-200;
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-out;
+  }
+}

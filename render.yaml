@@ -1,0 +1,42 @@
+services:
+  # Backend API Service
+  - type: web
+    name: limira-backend
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: FRONTEND_URL
+        sync: false  # Set in Render dashboard
+      - key: SECRET_KEY
+        generateValue: true  # Auto-generate secure secret
+      - key: DATABASE_URL
+        fromDatabase:
+          name: limira-db
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false  # Set in Render dashboard
+      - key: PRIMARY_LLM_PROVIDER
+        value: openai
+    healthCheckPath: /health
+
+  # PostgreSQL Database
+databases:
+  - name: limira-db
+    databaseName: limira
+    user: limira
+    region: oregon
+    plan: free
+    ipAllowList: []  # Allow access from anywhere
