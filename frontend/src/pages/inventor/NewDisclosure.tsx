@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { disclosureService } from '@/services/disclosureService'
-import { User, DisclosureContent } from '@/types'
+import { DisclosureContent, User } from '@/types'
 
 export default function NewDisclosure() {
-  const { user } = useAuth()
+  const { user: _user } = useAuth()  // Prefix with _ to indicate intentionally unused
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
