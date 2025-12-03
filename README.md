@@ -1,343 +1,527 @@
-# Limira
+# Limira - AI-Powered Patent Disclosure Platform
 
-**AI-Powered Patent Disclosure Platform**
+An intelligent web platform that transforms inventor disclosures into structured, lawyer-ready patent drafts using AI. Patent attorneys can review, edit, and collaborate with inventors seamlessly.
 
-Limira is a secure web platform where inventors upload technical disclosures, and the system uses AI to convert them into structured, lawyer-ready patent drafts. Patent attorneys can review, edit, comment, and collaborate with inventors.
+🌐 **Live Demo**: [https://limira.vercel.app](https://limira.vercel.app)  
+📚 **API Docs**: [https://limira-backend.onrender.com/docs](https://limira-backend.onrender.com/docs)
 
 ---
 
-## Features (MVP)
+## 🚀 Quick Start - Try the Live Demo
 
-### 🔬 Inventor Portal
-- Create and manage technical disclosures
-- Structured disclosure form (problem → solution → technical details)
-- Upload supporting files (drawings, documents, images)
-- Track disclosure status
+### Step 1: Check Backend Status
+
+Before using the application, verify the backend is awake (Render free tier sleeps after 15 minutes of inactivity):
+
+```bash
+# Check backend health
+curl https://limira-backend.onrender.com/health
+
+# Expected response: {"status":"healthy"}
+# First request may take 30-60 seconds if backend was sleeping
+```
+
+Or visit in your browser:
+```
+https://limira-backend.onrender.com/health
+```
+
+**Wait for the backend to respond** before proceeding (initial cold start: ~30-60 seconds).
+
+---
+
+### Step 2: Access the Application
+
+Visit: **https://limira.vercel.app**
+
+---
+
+### Step 3: Create an Account
+
+1. Click **"Sign up"**
+2. Fill in your details:
+   - **Email**: your-email@example.com
+   - **Password**: your-password
+   - **Full Name**: Your Name
+   - **Company**: Optional
+   - **Role**: Choose `INVENTOR` or `LAWYER`
+3. Click **"Sign Up"**
+4. You'll be automatically logged in and redirected to your dashboard
+
+---
+
+### Step 4: Explore Features
+
+#### As an Inventor:
+- Create new invention disclosures
+- Upload supporting documents
+- Track AI processing status
 - Collaborate with patent attorneys via comments
 
-### 🤖 AI Structuring Engine
-- Automatically extracts invention elements using LLM
-- Produces first-pass structured patent draft
-- Organizes uploaded drawings (figure index)
-- Generates editable sections: background, summary, details, claims
-
-### ⚖️ Lawyer Review Dashboard
-- View assigned disclosures
-- Review AI-generated drafts
-- Inline editor for patent sections
-- Comment threads with inventors
-- Approve or request revisions
-
-### 🔄 Version Control
-- Lightweight versioned document states
-- Track who edited what with timestamps
-
-### 💬 Collaboration System
-- Comment threads
-- Real-time notifications
-- Update history
+#### As a Lawyer:
+- Review assigned disclosures
+- View AI-generated patent drafts
+- Edit draft sections inline
+- Provide feedback to inventors
 
 ---
 
-## Tech Stack
-
-### Backend
-- **Framework**: FastAPI (Python 3.11+)
-- **Database**: PostgreSQL 15+
-- **ORM**: SQLAlchemy 2.0 (async)
-- **Authentication**: JWT (python-jose)
-- **AI/LLM**: OpenAI API / Anthropic Claude
-- **File Storage**: Local (MVP) → AWS S3 (production)
-
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **State Management**: React Context + hooks
-- **HTTP Client**: Axios
-- **Routing**: React Router v6
-
----
-
-## Project Structure
-
-```
-Limira/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/endpoints/    # API route handlers
-│   │   ├── core/                # Config, database, security
-│   │   ├── models/              # SQLAlchemy models
-│   │   ├── schemas/             # Pydantic schemas
-│   │   ├── services/            # Business logic (AI, files, etc.)
-│   │   ├── tasks/               # Background tasks
-│   │   └── main.py              # FastAPI app entry point
-│   ├── alembic/                 # Database migrations
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/          # React components
-│   │   ├── pages/               # Page components
-│   │   ├── services/            # API services
-│   │   ├── context/             # React Context (AuthContext, etc.)
-│   │   ├── types/               # TypeScript types
-│   │   └── main.tsx             # Entry point
-│   ├── package.json
-│   └── vite.config.ts
-│
-└── README.md
-```
-
----
-
-## Getting Started
+## 💻 Local Development Setup
 
 ### Prerequisites
+
 - **Python 3.11+**
 - **Node.js 18+**
 - **PostgreSQL 15+**
-- **OpenAI API Key** or **Anthropic API Key**
+- **OpenAI API Key** (get from [OpenAI Platform](https://platform.openai.com/api-keys))
+- **UV** (recommended) or pip for Python package management
 
 ---
 
 ### Backend Setup
 
-1. **Navigate to backend directory**
-   ```bash
-   cd backend
-   ```
+#### 1. Install PostgreSQL (if not installed)
 
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+**macOS:**
+```bash
+brew install postgresql@15
+brew services start postgresql@15
+```
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Verify installation:**
+```bash
+psql --version
+# Expected: psql (PostgreSQL) 15.x
+```
 
-4. **Create `.env` file**
-   ```bash
-   cp .env.example .env
-   ```
+---
 
-   Edit `.env` and configure:
-   - `SECRET_KEY` - Generate a secure random key (min 32 chars)
-   - `DATABASE_URL` - PostgreSQL connection string
-   - `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` - Your AI provider key
-   - Other settings as needed
+#### 2. Clone and Setup Backend
 
-5. **Create database**
-   ```bash
-   createdb limira_db
-   ```
+```bash
+# Navigate to backend directory
+cd backend
 
-6. **Run database migrations**
-   ```bash
-   alembic revision --autogenerate -m "Initial migration"
-   alembic upgrade head
-   ```
+# Install dependencies (using UV - recommended)
+uv pip install -r requirements.txt
 
-7. **Start the backend server**
-   ```bash
-   python -m app.main
-   # or
-   uvicorn app.main:app --reload
-   ```
+# Alternative: using traditional pip
+# python -m venv venv
+# source venv/bin/activate
+# pip install -r requirements.txt
+```
 
-   Backend runs at: **http://localhost:8000**
-   API docs: **http://localhost:8000/docs**
+---
+
+#### 3. Configure Environment Variables
+
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit .env and configure:
+nano .env
+```
+
+**Required variables:**
+```bash
+# Application
+SECRET_KEY=your-super-secret-key-min-32-characters
+DATABASE_URL=postgresql://localhost:5432/limira_db
+
+# AI Provider
+OPENAI_API_KEY=sk-proj-your-openai-api-key
+PRIMARY_LLM_PROVIDER=openai
+
+# Environment
+ENVIRONMENT=development
+DEBUG=True
+```
+
+**Generate a secure SECRET_KEY:**
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+---
+
+#### 4. Create Database
+
+```bash
+# Create PostgreSQL database
+createdb limira_db
+
+# If createdb not found, add PostgreSQL to PATH:
+# echo 'export PATH="/opt/homebrew/opt/postgresql@15/bin:$PATH"' >> ~/.zshrc
+# source ~/.zshrc
+```
+
+---
+
+#### 5. Run Database Migrations
+
+```bash
+# Apply database migrations
+uv run alembic upgrade head
+
+# Alternative without UV:
+# alembic upgrade head
+```
+
+Expected output:
+```
+INFO  [alembic.runtime.migration] Running upgrade  -> ..., Initial migration
+```
+
+---
+
+#### 6. Start Backend Server
+
+```bash
+# Start with UV (recommended)
+uv run uvicorn app.main:app --reload
+
+# Alternative:
+# uvicorn app.main:app --reload
+```
+
+**Backend will run at**: http://localhost:8000  
+**API Documentation**: http://localhost:8000/docs
+
+**Expected startup logs:**
+```
+✅ Created test inventor account: inventor@test.com / password123
+✅ Created test attorney account: attorney@test.com / password123
+INFO:     Uvicorn running on http://127.0.0.1:8000
+```
 
 ---
 
 ### Frontend Setup
 
-1. **Navigate to frontend directory**
-   ```bash
-   cd frontend
-   ```
+#### 1. Install Dependencies
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+**Open a new terminal** (keep backend running), then:
 
-3. **Create `.env` file**
-   ```bash
-   cp .env.example .env
-   ```
-
-   Default values should work for local development:
-   ```
-   VITE_API_URL=http://localhost:8000/api/v1
-   ```
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-   Frontend runs at: **http://localhost:5173**
-
----
-
-## Usage
-
-### 1. Create an Account
-- Navigate to http://localhost:5173/signup
-- Choose role: **Inventor** or **Patent Attorney**
-- Fill in your details and sign up
-
-### 2. Inventor Workflow
-1. Login as Inventor
-2. Click "New Disclosure"
-3. Fill in the structured form:
-   - Title
-   - Problem statement
-   - Solution overview
-   - Technical details
-   - Advantages
-4. Upload supporting files (drawings, documents)
-5. Submit disclosure
-6. AI automatically processes and generates patent draft
-7. Review AI-generated draft
-8. Collaborate with assigned patent attorney via comments
-
-### 3. Lawyer Workflow
-1. Login as Patent Attorney
-2. View assigned disclosures on dashboard
-3. Click on a disclosure to review
-4. View AI-generated patent draft
-5. Edit sections inline
-6. Add comments for inventor
-7. Choose action:
-   - **Approve** → Mark as approved
-   - **Request Revisions** → Send back to inventor with feedback
-
----
-
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/signup` - Create new user account
-- `POST /api/v1/auth/login` - Login and get JWT tokens
-- `POST /api/v1/auth/refresh` - Refresh access token
-
-### Disclosures
-- `GET /api/v1/disclosures/` - List disclosures (role-filtered)
-- `POST /api/v1/disclosures/` - Create new disclosure
-- `GET /api/v1/disclosures/{id}` - Get disclosure details
-- `PATCH /api/v1/disclosures/{id}` - Update disclosure
-- `GET /api/v1/disclosures/{id}/versions` - Get version history
-
-### Patent Drafts
-- `GET /api/v1/drafts/{disclosure_id}` - Get AI-generated draft
-- `PATCH /api/v1/drafts/{id}/sections` - Edit draft section
-- `POST /api/v1/drafts/{disclosure_id}/approve` - Approve draft
-- `POST /api/v1/drafts/{disclosure_id}/request-revision` - Request revision
-
-### Comments
-- `GET /api/v1/comments/disclosures/{id}/comments` - Get all comments
-- `POST /api/v1/comments/disclosures/{id}/comments` - Add comment
-- `PATCH /api/v1/comments/{id}` - Update comment
-- `DELETE /api/v1/comments/{id}` - Delete comment
-
-### Files
-- `POST /api/v1/files/upload/{disclosure_id}` - Upload file
-- `GET /api/v1/files/disclosure/{disclosure_id}/files` - List files
-- `GET /api/v1/files/{id}/download` - Download file
-
----
-
-## Development Notes
-
-### Database Models
-
-**User** → Inventor, Lawyer, Admin roles
-**Disclosure** → Technical disclosure with structured content (JSON)
-**PatentDraft** → AI-generated patent sections
-**DisclosureVersion** → Version control snapshots
-**File** → Uploaded files (drawings, documents)
-**Comment** → Collaboration comments (threaded)
-**Notification** → User notifications
-
-### Authentication & Authorization
-
-- **JWT** tokens (access + refresh)
-- **Role-based access control** (RBAC)
-  - Inventors can only see their own disclosures
-  - Lawyers see assigned disclosures
-  - Admins see everything
-
-### AI Integration
-
-- Uses OpenAI GPT-4 or Anthropic Claude
-- Prompts engineered for patent draft generation
-- Structured JSON output for patent sections
-- Background task processing (async)
-
-### File Upload
-
-- MVP: Local file storage (`uploads/` directory)
-- Production: AWS S3 with signed URLs
-- Allowed types: PDF, PNG, JPG, JPEG, DOCX
-- Max size: 10MB per file
-
----
-
-## Next Steps (Post-MVP)
-
-- [ ] Real-time WebSocket notifications
-- [ ] Video chat with AI transcription
-- [ ] Advanced rich text editor (TipTap/ProseMirror)
-- [ ] Document comparison (diff viewer)
-- [ ] Email notifications
-- [ ] Admin dashboard with analytics
-- [ ] Export to Word/PDF
-- [ ] Mobile responsive design improvements
-- [ ] Unit and integration tests
-
----
-
-## Environment Variables
-
-### Backend (.env)
 ```bash
-# Application
-APP_NAME=Limira
-ENVIRONMENT=development
-SECRET_KEY=your-secret-key-min-32-chars
+# Navigate to frontend directory
+cd frontend
 
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/limira_db
-
-# AI
-OPENAI_API_KEY=sk-...
-# or
-ANTHROPIC_API_KEY=sk-ant-...
-PRIMARY_LLM_PROVIDER=openai
-
-# CORS
-FRONTEND_URL=http://localhost:5173
+# Install dependencies
+npm install
 ```
 
-### Frontend (.env)
+---
+
+#### 2. Configure Environment
+
+```bash
+# Copy example env file
+cp .env.example .env
+```
+
+**Verify `.env` contains:**
 ```bash
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
 ---
 
-## License
+#### 3. Start Frontend Server
+
+```bash
+npm run dev
+```
+
+**Frontend will run at**: http://localhost:5173
+
+Expected output:
+```
+  VITE v5.x.x  ready in xxx ms
+
+  ➜  Local:   http://localhost:5173/
+```
+
+---
+
+### 🧪 Test Local Installation
+
+1. **Open browser**: http://localhost:5173
+2. **Sign up** for a new account
+3. **Create a disclosure** (as Inventor)
+4. **Review drafts** (as Lawyer)
+
+---
+
+## 🎯 Daily Development Workflow
+
+```bash
+# Terminal 1 - Backend
+cd backend
+uv run uvicorn app.main:app --reload
+
+# Terminal 2 - Frontend
+cd frontend
+npm run dev
+```
+
+Then visit: **http://localhost:5173**
+
+---
+
+## 🏗️ Tech Stack
+
+### Backend
+- **Framework**: FastAPI (Python 3.11+)
+- **Database**: PostgreSQL 15+ with SQLAlchemy 2.0 (async)
+- **Authentication**: JWT tokens
+- **AI/LLM**: OpenAI GPT-4 / Anthropic Claude
+- **Migrations**: Alembic
+
+### Frontend
+- **Framework**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **State Management**: Zustand
+- **HTTP Client**: Axios
+- **Routing**: React Router v6
+
+---
+
+## 📁 Project Structure
+
+```
+Limira/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/endpoints/    # API routes
+│   │   ├── core/                # Config, database, security
+│   │   ├── models/              # SQLAlchemy models
+│   │   ├── schemas/             # Pydantic schemas
+│   │   ├── services/            # Business logic (AI, files)
+│   │   └── main.py              # FastAPI entry point
+│   ├── alembic/                 # Database migrations
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/          # React components
+│   │   ├── pages/               # Page components
+│   │   ├── services/            # API services
+│   │   ├── context/             # React Context
+│   │   └── types/               # TypeScript types
+│   └── package.json
+│
+├── docs/                        # Deployment documentation
+├── .github/workflows/           # CI/CD pipelines
+└── README.md
+```
+
+---
+
+## 🔐 Test Accounts (Auto-created on Startup)
+
+The application automatically creates test accounts on first startup:
+
+### Inventor Account
+- **Email**: inventor@test.com
+- **Password**: password123
+- **Login**: http://localhost:5173/login/inventor
+
+### Lawyer Account
+- **Email**: attorney@test.com
+- **Password**: password123
+- **Login**: http://localhost:5173/login/attorney
+
+> **Note**: Test accounts are created automatically. You can also register new accounts via the signup page.
+
+---
+
+## 🚢 Deployment
+
+The application is deployed with automatic CI/CD:
+
+- **Frontend**: Vercel (auto-deploy on push to `main`)
+- **Backend**: Render (auto-deploy on push to `main`)
+- **Database**: Render PostgreSQL
+- **CI/CD**: GitHub Actions
+
+**Every push to `main` branch automatically triggers deployment!**
+
+For detailed deployment instructions, see:
+- [Complete Deployment Guide](docs/DEPLOYMENT.md)
+- [Quick Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md)
+
+---
+
+## 🛠️ Troubleshooting
+
+### Backend Issues
+
+**Database connection error:**
+```bash
+# Check PostgreSQL is running
+brew services list | grep postgresql
+
+# Restart if needed
+brew services restart postgresql@15
+
+# Verify database exists
+psql -l | grep limira_db
+```
+
+**Migration errors:**
+```bash
+# Reset database (WARNING: deletes all data)
+dropdb limira_db
+createdb limira_db
+uv run alembic upgrade head
+```
+
+**OpenAI API errors:**
+- Verify your API key is valid
+- Check you have available credits at https://platform.openai.com/account/usage
+
+---
+
+### Frontend Issues
+
+**API connection errors:**
+```bash
+# Verify backend is running
+curl http://localhost:8000/health
+
+# Check frontend .env file
+cat frontend/.env
+# Should contain: VITE_API_URL=http://localhost:8000/api/v1
+```
+
+**Build errors:**
+```bash
+# Clear node_modules and reinstall
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
+
+---
+
+### Live Demo Issues
+
+**Backend not responding:**
+- Wait 30-60 seconds for Render free tier to wake up
+- Visit https://limira-backend.onrender.com/health to wake it up
+- Check status at https://dashboard.render.com
+
+**Login fails with "Incorrect email or password":**
+- Register a new account instead of using test accounts
+- Test accounts may not be available on first deployment
+
+---
+
+## 📚 API Documentation
+
+### Interactive API Docs
+
+**Local**: http://localhost:8000/docs  
+**Live**: https://limira-backend.onrender.com/docs
+
+### Key Endpoints
+
+#### Authentication
+- `POST /api/v1/auth/signup` - Register new user
+- `POST /api/v1/auth/login` - Login and get JWT tokens
+- `POST /api/v1/auth/refresh` - Refresh access token
+
+#### Disclosures
+- `GET /api/v1/disclosures/` - List disclosures (role-filtered)
+- `POST /api/v1/disclosures/` - Create new disclosure
+- `GET /api/v1/disclosures/{id}` - Get disclosure details
+- `PATCH /api/v1/disclosures/{id}` - Update disclosure
+
+#### Patent Drafts
+- `GET /api/v1/drafts/{disclosure_id}` - Get AI-generated draft
+- `PATCH /api/v1/drafts/{id}/sections` - Edit draft section
+
+#### Comments
+- `GET /api/v1/comments/disclosures/{id}/comments` - Get comments
+- `POST /api/v1/comments/disclosures/{id}/comments` - Add comment
+
+---
+
+## 🔄 Database Management
+
+### Create New Migration
+
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "Description of changes"
+uv run alembic upgrade head
+```
+
+### Rollback Migration
+
+```bash
+uv run alembic downgrade -1  # Rollback one version
+```
+
+### View Migration History
+
+```bash
+uv run alembic history
+uv run alembic current
+```
+
+---
+
+## 🎨 Features
+
+### For Inventors
+- ✅ Create structured invention disclosures
+- ✅ Upload supporting documents and drawings
+- ✅ AI-powered patent draft generation
+- ✅ Real-time collaboration with attorneys
+- ✅ Track disclosure status
+
+### For Patent Attorneys
+- ✅ Review assigned disclosures
+- ✅ AI-generated patent sections
+- ✅ Inline editing capabilities
+- ✅ Comment and feedback system
+- ✅ Approve or request revisions
+
+### AI Capabilities
+- ✅ Automatic patent structure generation
+- ✅ Claims drafting assistance
+- ✅ Prior art analysis
+- ✅ Technical detail extraction
+
+---
+
+## 🤝 Contributing
+
+This is a private project. For questions or suggestions, contact the development team.
+
+---
+
+## 📄 License
 
 Proprietary - All rights reserved
 
 ---
 
-## Contact
+## 🆘 Support
 
-For questions or support, contact the development team.
+### Documentation
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Deployment Checklist](docs/DEPLOYMENT_CHECKLIST.md)
+
+### External Resources
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [React Documentation](https://react.dev/)
+- [Render Documentation](https://render.com/docs)
+- [Vercel Documentation](https://vercel.com/docs)
+
+---
+
+**Built with ❤️ for inventors and patent attorneys**
