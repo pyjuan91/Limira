@@ -77,12 +77,12 @@ class RoleChecker:
     """
 
     def __init__(self, allowed_roles: list):
-        # Convert to list of strings for comparison
-        self.allowed_roles = [str(role) if hasattr(role, 'value') else role for role in allowed_roles]
+        # Convert to list of role values (strings) for comparison
+        self.allowed_roles = [role.value if hasattr(role, 'value') else role for role in allowed_roles]
 
     def __call__(self, user: User = Depends(get_current_active_user)):
-        # Convert user.role to string for comparison
-        user_role_str = str(user.role.value) if hasattr(user.role, 'value') else str(user.role)
+        # Get user role value as string
+        user_role_str = user.role.value if hasattr(user.role, 'value') else str(user.role)
 
         if user_role_str not in self.allowed_roles:
             raise HTTPException(
