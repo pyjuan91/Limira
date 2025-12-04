@@ -112,7 +112,11 @@ export default function InventorDashboard() {
         ) : (
           <div className="grid gap-5">
             {disclosures.map((disclosure) => (
-              <div key={disclosure.id} className="card-hover">
+              <div
+                key={disclosure.id}
+                onClick={() => navigate(`/inventor/disclosure/${disclosure.id}`)}
+                className="card-hover cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5"
+              >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-neutral-900 mb-2">{disclosure.title}</h3>
