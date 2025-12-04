@@ -4,6 +4,14 @@ Smart migration script for Render deployment
 Handles database migration without shell access
 """
 import sys
+import os
+from pathlib import Path
+
+# Add backend directory to Python path
+script_dir = Path(__file__).parent
+backend_dir = script_dir.parent
+sys.path.insert(0, str(backend_dir))
+
 from sqlalchemy import create_engine, inspect, text
 from alembic.config import Config
 from alembic import command
@@ -63,7 +71,8 @@ def smart_migrate():
     print(f"   - comments.selected_text: {'✅' if selected_text_exists else '❌'}")
 
     # Setup alembic config
-    alembic_cfg = Config("alembic.ini")
+    alembic_ini_path = backend_dir / "alembic.ini"
+    alembic_cfg = Config(str(alembic_ini_path))
 
     # Determine what to do
     if current_version is None:
