@@ -35,4 +35,16 @@ export const disclosureService = {
     const response = await api.patch<Disclosure>(`/disclosures/${id}/status`, { status })
     return response.data
   },
+
+  async setPatentFile(disclosureId: number, fileId: number): Promise<Disclosure> {
+    const response = await api.post<Disclosure>(
+      `/disclosures/${disclosureId}/set-patent-file?file_id=${fileId}`
+    )
+    return response.data
+  },
+
+  async analyzePatent(disclosureId: number): Promise<Disclosure> {
+    const response = await api.post<Disclosure>(`/disclosures/${disclosureId}/analyze-patent`)
+    return response.data
+  },
 }

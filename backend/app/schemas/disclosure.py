@@ -1,13 +1,17 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, Dict, Any
-from app.models.disclosure import DisclosureStatus
+from app.models.disclosure import DisclosureStatus, DisclosureType
 
 
 # Request schemas
 class DisclosureCreate(BaseModel):
     """Create new disclosure"""
     title: str = Field(..., min_length=1, max_length=200)
+    disclosure_type: DisclosureType = Field(
+        default=DisclosureType.NEW_DISCLOSURE,
+        description="Type of disclosure: NEW_DISCLOSURE or PATENT_REVIEW"
+    )
     content: Dict[str, Any] = Field(
         default={},
         description="Structured disclosure content: problem, solution, technical_details, etc."
@@ -15,6 +19,10 @@ class DisclosureCreate(BaseModel):
     assigned_lawyer_id: Optional[int] = Field(
         None,
         description="Optional: Assign a lawyer to this disclosure upon creation"
+    )
+    patent_number: Optional[str] = Field(
+        None,
+        description="For PATENT_REVIEW: the patent number (e.g., US10,123,456)"
     )
 
 
@@ -40,9 +48,13 @@ class DisclosureResponse(BaseModel):
     id: int
     title: str
     status: DisclosureStatus
+    disclosure_type: DisclosureType = DisclosureType.NEW_DISCLOSURE
     inventor_id: int
     assigned_lawyer_id: Optional[int] = None
     content: Dict[str, Any]
+    patent_number: Optional[str] = None
+    patent_file_id: Optional[int] = None
+    ai_analysis: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -55,8 +67,10 @@ class DisclosureListResponse(BaseModel):
     id: int
     title: str
     status: DisclosureStatus
+    disclosure_type: DisclosureType = DisclosureType.NEW_DISCLOSURE
     inventor_id: int
     assigned_lawyer_id: Optional[int] = None
+    patent_number: Optional[str] = None
     created_at: datetime
 
     class Config:

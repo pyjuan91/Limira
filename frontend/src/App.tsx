@@ -9,6 +9,7 @@ import AttorneyLogin from '@/pages/auth/AttorneyLogin'
 import Signup from '@/pages/auth/Signup'
 import InventorDashboard from '@/pages/inventor/Dashboard'
 import NewDisclosure from '@/pages/inventor/NewDisclosure'
+import UploadPatent from '@/pages/inventor/UploadPatent'
 import InventorDisclosureDetail from '@/pages/inventor/DisclosureDetail'
 import LawyerDashboard from '@/pages/lawyer/Dashboard'
 import LawyerDisclosureDetail from '@/pages/lawyer/DisclosureDetail'
@@ -83,6 +84,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={[UserRole.INVENTOR, UserRole.ADMIN]}>
               <NewDisclosure />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventor/upload-patent"
+          element={
+            <ProtectedRoute allowedRoles={[UserRole.INVENTOR, UserRole.ADMIN]}>
+              <UploadPatent />
             </ProtectedRoute>
           }
         />

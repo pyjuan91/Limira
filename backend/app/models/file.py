@@ -37,7 +37,7 @@ class File(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    disclosure = relationship("Disclosure", back_populates="files")
+    disclosure = relationship("Disclosure", back_populates="files", foreign_keys=[disclosure_id])
 
     def __repr__(self):
         return f"<File(id={self.id}, filename={self.original_filename}, type={self.file_type})>"

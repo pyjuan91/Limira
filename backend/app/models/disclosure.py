@@ -65,7 +65,7 @@ class Disclosure(Base):
     assigned_lawyer = relationship("User", back_populates="assigned_disclosures", foreign_keys=[assigned_lawyer_id])
     versions = relationship("DisclosureVersion", back_populates="disclosure", cascade="all, delete-orphan")
     patent_draft = relationship("PatentDraft", back_populates="disclosure", uselist=False, cascade="all, delete-orphan")
-    files = relationship("File", back_populates="disclosure", cascade="all, delete-orphan")
+    files = relationship("File", back_populates="disclosure", foreign_keys="[File.disclosure_id]", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="disclosure", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="disclosure", cascade="all, delete-orphan")
     video_sessions = relationship("VideoSession", back_populates="disclosure", cascade="all, delete-orphan")

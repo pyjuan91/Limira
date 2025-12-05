@@ -4,7 +4,8 @@ from typing import List
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user, RoleChecker
 from app.models.user import User, UserRole
-from app.models.disclosure import Disclosure, DisclosureStatus, DisclosureVersion
+from app.models.disclosure import Disclosure, DisclosureStatus, DisclosureVersion, DisclosureType
+from app.models.file import File
 from app.schemas import (
     DisclosureCreate,
     DisclosureUpdate,
@@ -14,6 +15,8 @@ from app.schemas import (
     LawyerAssignment,
     DisclosureVersionResponse,
 )
+from app.services.ai_service import ai_service
+import os
 
 router = APIRouter()
 
@@ -71,10 +74,12 @@ def create_disclosure(
 
     new_disclosure = Disclosure(
         title=disclosure_data.title,
+        disclosure_type=disclosure_data.disclosure_type,
         content=disclosure_data.content,
         inventor_id=current_user.id,
         assigned_lawyer_id=disclosure_data.assigned_lawyer_id,
         status=initial_status,
+        patent_number=disclosure_data.patent_number,
     )
 
     db.add(new_disclosure)
@@ -283,3 +288,110 @@ def delete_disclosure(
     db.commit()
 
     return None
+
+
+@router.post("/{disclosure_id}/set-patent-file", response_model=DisclosureResponse)
+def set_patent_file(
+    disclosure_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Set the main patent PDF file for a PATENT_REVIEW disclosure
+    """
+    disclosure = db.query(Disclosure).filter(Disclosure.id == disclosure_id).first()
+
+    if not disclosure:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disclosure not found")
+
+    # Check permissions
+    if current_user.role == UserRole.INVENTOR and disclosure.inventor_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Verify file exists and belongs to this disclosure
+    file = db.query(File).filter(File.id == file_id, File.disclosure_id == disclosure_id).first()
+    if not file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    disclosure.patent_file_id = file_id
+    db.commit()
+    db.refresh(disclosure)
+
+    return disclosure
+
+
+@router.post("/{disclosure_id}/analyze-patent", response_model=DisclosureResponse)
+def analyze_patent(
+    disclosure_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Trigger AI analysis of the patent PDF
+
+    Extracts text from the patent PDF and runs comprehensive AI analysis.
+    Only works for PATENT_REVIEW type disclosures.
+    """
+    disclosure = db.query(Disclosure).filter(Disclosure.id == disclosure_id).first()
+
+    if not disclosure:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Disclosure not found")
+
+    # Check permissions
+    if current_user.role == UserRole.INVENTOR and disclosure.inventor_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    elif current_user.role == UserRole.LAWYER and disclosure.assigned_lawyer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    # Must be a PATENT_REVIEW type
+    if disclosure.disclosure_type != DisclosureType.PATENT_REVIEW:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Analysis only available for PATENT_REVIEW type disclosures"
+        )
+
+    # Must have a patent file
+    if not disclosure.patent_file_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No patent file uploaded. Please upload a patent PDF first."
+        )
+
+    # Get the patent file
+    patent_file = db.query(File).filter(File.id == disclosure.patent_file_id).first()
+    if not patent_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patent file not found")
+
+    # Extract text from PDF
+    file_path = os.path.join(os.getcwd(), "uploads", str(disclosure_id), patent_file.s3_key)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patent file not found on server")
+
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(file_path)
+        patent_text = ""
+        for page in doc:
+            patent_text += page.get_text()
+        doc.close()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to extract text from PDF: {str(e)}"
+        )
+
+    # Run AI analysis
+    try:
+        analysis_result = ai_service.analyze_patent(patent_text, disclosure.patent_number)
+        disclosure.ai_analysis = analysis_result
+        db.commit()
+        db.refresh(disclosure)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI analysis failed: {str(e)}"
+        )
+
+    return disclosure

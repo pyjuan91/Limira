@@ -4,7 +4,8 @@ import { useAuth } from '@/context/AuthContext'
 import { disclosureService } from '@/services/disclosureService'
 import { commentService, messageService, Message } from '@/services/commentService'
 import { draftService, PatentDraft } from '@/services/draftService'
-import { Disclosure, Comment } from '@/types'
+import { fileService } from '@/services/fileService'
+import { Disclosure, Comment, DisclosureType } from '@/types'
 import HighlightableText from '@/components/HighlightableText'
 import CommentThread from '@/components/CommentThread'
 import Sidebar, { SidebarTool } from '@/components/layout/Sidebar'
@@ -365,63 +366,95 @@ export default function InventorDisclosureDetail() {
         {/* Content Area */}
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-5xl mx-auto h-full">
-            {/* Patent Draft View */}
+            {/* Patent Draft View - Different for NEW_DISCLOSURE vs PATENT_REVIEW */}
             {activeTool === 'draft' && (
               <div className="card h-full flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between pb-4 border-b border-neutral-200 flex-shrink-0">
-                  <h2 className="text-lg font-semibold text-neutral-900">Patent Draft</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-neutral-900">
+                      {disclosure?.disclosure_type === DisclosureType.PATENT_REVIEW ? 'Patent Document' : 'Patent Draft'}
+                    </h2>
+                    {disclosure?.patent_number && (
+                      <span className="text-sm text-neutral-500">({disclosure.patent_number})</span>
+                    )}
+                  </div>
                   <span className="text-xs text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
                     Read-Only
                   </span>
                 </div>
 
-                {/* Patent Draft Viewer with Highlights */}
-                <div className="flex-1 overflow-y-auto bg-white rounded-lg border border-neutral-200 p-6 mt-4">
-                  <HighlightableText
-                    text={patentDraft}
-                    comments={comments}
-                    onTextSelect={handleTextSelection}
-                    onHighlightClick={handleHighlightClick}
-                    className="font-mono text-sm text-neutral-700 leading-relaxed"
-                  />
-                </div>
-
-                {/* Comment on Selection Dialog */}
-                {showCommentDialog && (
-                  <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200 flex-shrink-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
-                      <button
-                        onClick={() => {
-                          setShowCommentDialog(false)
-                          setSelectedText('')
-                          setCommentContent('')
-                        }}
-                        className="text-neutral-400 hover:text-neutral-600"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
-                      <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
-                      <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
-                    </div>
-                    <textarea
-                      value={commentContent}
-                      onChange={(e) => setCommentContent(e.target.value)}
-                      placeholder="Enter your comment..."
-                      className="input-field w-full min-h-[80px] text-sm mb-2"
-                    />
-                    <button
-                      onClick={handleAddComment}
-                      disabled={!commentContent.trim()}
-                      className="btn-primary w-full text-sm"
-                    >
-                      Add Comment
-                    </button>
+                {/* Content depends on disclosure type */}
+                {disclosure?.disclosure_type === DisclosureType.PATENT_REVIEW ? (
+                  /* PDF Viewer for PATENT_REVIEW */
+                  <div className="flex-1 overflow-hidden bg-neutral-100 rounded-lg border border-neutral-200 mt-4">
+                    {disclosure.patent_file_id ? (
+                      <iframe
+                        src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/files/${disclosure.patent_file_id}/preview`}
+                        className="w-full h-full"
+                        title="Patent PDF"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-neutral-500">
+                        <div className="text-center">
+                          <svg className="w-16 h-16 mx-auto mb-4 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <p>No patent PDF uploaded yet</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  /* Patent Draft Viewer with Highlights for NEW_DISCLOSURE */
+                  <>
+                    <div className="flex-1 overflow-y-auto bg-white rounded-lg border border-neutral-200 p-6 mt-4">
+                      <HighlightableText
+                        text={patentDraft}
+                        comments={comments}
+                        onTextSelect={handleTextSelection}
+                        onHighlightClick={handleHighlightClick}
+                        className="font-mono text-sm text-neutral-700 leading-relaxed"
+                      />
+                    </div>
+
+                    {/* Comment on Selection Dialog */}
+                    {showCommentDialog && (
+                      <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200 flex-shrink-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
+                          <button
+                            onClick={() => {
+                              setShowCommentDialog(false)
+                              setSelectedText('')
+                              setCommentContent('')
+                            }}
+                            className="text-neutral-400 hover:text-neutral-600"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
+                          <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
+                          <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
+                        </div>
+                        <textarea
+                          value={commentContent}
+                          onChange={(e) => setCommentContent(e.target.value)}
+                          placeholder="Enter your comment..."
+                          className="input-field w-full min-h-[80px] text-sm mb-2"
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          disabled={!commentContent.trim()}
+                          className="btn-primary w-full text-sm"
+                        >
+                          Add Comment
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

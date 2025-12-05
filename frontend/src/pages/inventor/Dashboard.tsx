@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { disclosureService } from '@/services/disclosureService'
-import { Disclosure, DisclosureStatus } from '@/types'
+import { Disclosure, DisclosureStatus, DisclosureType } from '@/types'
 
 export default function InventorDashboard() {
   const { user, logout } = useAuth()
@@ -68,15 +68,26 @@ export default function InventorDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-semibold text-neutral-900 tracking-tight">My Disclosures</h2>
-          <button
-            onClick={() => navigate('/inventor/new-disclosure')}
-            className="btn-primary"
-          >
-            <svg className="w-5 h-5 inline-block mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Disclosure
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => navigate('/inventor/upload-patent')}
+              className="btn-secondary"
+            >
+              <svg className="w-5 h-5 inline-block mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload Patent
+            </button>
+            <button
+              onClick={() => navigate('/inventor/new-disclosure')}
+              className="btn-primary"
+            >
+              <svg className="w-5 h-5 inline-block mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              New Disclosure
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -119,7 +130,14 @@ export default function InventorDashboard() {
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-neutral-900 mb-2">{disclosure.title}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-lg font-semibold text-neutral-900">{disclosure.title}</h3>
+                      {disclosure.disclosure_type === DisclosureType.PATENT_REVIEW && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                          Patent Review
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-neutral-600">
                       <span className="flex items-center">
                         <svg className="w-4 h-4 mr-1.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,6 +145,14 @@ export default function InventorDashboard() {
                         </svg>
                         {new Date(disclosure.created_at).toLocaleDateString()}
                       </span>
+                      {disclosure.patent_number && (
+                        <span className="flex items-center">
+                          <svg className="w-4 h-4 mr-1.5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          {disclosure.patent_number}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className={`status-badge ${getStatusBadge(disclosure.status)}`}>

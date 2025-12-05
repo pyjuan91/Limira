@@ -5,7 +5,7 @@ import { disclosureService } from '@/services/disclosureService'
 import { chatService, ChatMessage as APIChatMessage } from '@/services/chatService'
 import { commentService, messageService, Message } from '@/services/commentService'
 import { draftService, PatentDraft } from '@/services/draftService'
-import { Disclosure, DisclosureStatus, Comment } from '@/types'
+import { Disclosure, DisclosureStatus, DisclosureType, Comment } from '@/types'
 import HighlightableText from '@/components/HighlightableText'
 import CommentThread from '@/components/CommentThread'
 import Sidebar, { SidebarTool } from '@/components/layout/Sidebar'
@@ -131,6 +131,10 @@ export default function LawyerDisclosureDetail() {
   const [inventorInputMessage, setInventorInputMessage] = useState('')
   const [isSendingInventorMessage, setIsSendingInventorMessage] = useState(false)
   const inventorChatEndRef = useRef<HTMLDivElement>(null)
+
+  // Patent Review AI Analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
 
   useEffect(() => {
     if (id) {
@@ -384,6 +388,23 @@ export default function LawyerDisclosureDetail() {
     navigate('/welcome')
   }
 
+  const handleAnalyzePatent = async () => {
+    if (!id) return
+
+    setIsAnalyzing(true)
+    setAnalysisError('')
+
+    try {
+      await disclosureService.analyzePatent(parseInt(id))
+      // Reload disclosure to get the analysis results
+      await loadDisclosure()
+    } catch (err: any) {
+      setAnalysisError(err.response?.data?.detail || 'Failed to analyze patent')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
   const getStatusBadge = (status: DisclosureStatus) => {
     const badges = {
       [DisclosureStatus.DRAFT]: 'badge-draft',
@@ -484,144 +505,365 @@ export default function LawyerDisclosureDetail() {
           <div className="max-w-7xl mx-auto h-full">
             {/* Render content based on active tool */}
             {activeTool === 'draft' && (
-              <div className="card h-full flex flex-col">
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-medium text-neutral-700">Patent Draft</h2>
-                    {lastSaved && isEditMode && (
-                      <span className="text-xs text-neutral-400">• Saved {lastSaved.toLocaleTimeString()}</span>
-                    )}
-
-                    {/* Mode Toggle */}
-                    <div className="flex items-center gap-1 bg-neutral-100 rounded-lg p-1">
-                      <button
-                        onClick={() => {
-                          setIsEditMode(true)
-                          setShowCommentDialog(false)
-                        }}
-                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                          isEditMode
-                            ? 'bg-white text-navy-700 font-medium shadow-sm'
-                            : 'text-neutral-600 hover:text-neutral-900'
-                        }`}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setIsEditMode(false)}
-                        className={`px-3 py-1 text-xs rounded transition-colors ${
-                          !isEditMode
-                            ? 'bg-white text-navy-700 font-medium shadow-sm'
-                            : 'text-neutral-600 hover:text-neutral-900'
-                        }`}
-                      >
-                        Comment
-                      </button>
+              <>
+                {/* PATENT_REVIEW type: Show PDF viewer and AI Analysis */}
+                {disclosure?.disclosure_type === DisclosureType.PATENT_REVIEW ? (
+                  <div className="h-full flex gap-4">
+                    {/* PDF Viewer */}
+                    <div className="flex-1 card flex flex-col overflow-hidden">
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-sm font-medium text-neutral-700">Patent Document</h2>
+                          {disclosure.patent_number && (
+                            <span className="text-xs text-neutral-500">• {disclosure.patent_number}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex-1 bg-neutral-100 rounded-lg overflow-hidden">
+                        {disclosure.patent_file_id ? (
+                          <iframe
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'}/files/${disclosure.patent_file_id}/preview`}
+                            className="w-full h-full"
+                            title="Patent PDF"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-neutral-500">
+                            <p>No patent file uploaded</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {isEditMode && (
-                    <button
-                      onClick={handleSaveDocument}
-                      disabled={isSaving}
-                      className="btn-primary text-xs py-1.5 px-3"
-                    >
-                      {isSaving ? (
-                        <>
-                          <svg
-                            className="animate-spin -ml-1 mr-1.5 h-3 w-3 text-white inline"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Saving...
-                        </>
-                      ) : (
-                        'Save'
+                    {/* AI Analysis Panel */}
+                    <div className="w-96 card flex flex-col overflow-hidden">
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+                        <h2 className="text-sm font-medium text-neutral-700">AI Analysis</h2>
+                        <button
+                          onClick={handleAnalyzePatent}
+                          disabled={isAnalyzing || !disclosure.patent_file_id}
+                          className="btn-primary text-xs py-1.5 px-3"
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-1.5 h-3 w-3 text-white inline" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Analyzing...
+                            </>
+                          ) : disclosure.ai_analysis ? (
+                            'Re-analyze'
+                          ) : (
+                            'Analyze Patent'
+                          )}
+                        </button>
+                      </div>
+
+                      {analysisError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                          {analysisError}
+                        </div>
                       )}
-                    </button>
-                  )}
-                </div>
 
-                {/* Document Editor / Comment View */}
-                {isEditMode ? (
-                  <div className="flex-1 overflow-hidden">
-                    <textarea
-                      ref={textareaRef}
-                      value={patentDraft}
-                      onChange={(e) => setPatentDraft(e.target.value)}
-                      className="w-full h-full px-6 py-4 bg-white border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none font-mono text-sm leading-relaxed"
-                      style={{
-                        fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace",
-                      }}
-                      placeholder="Start editing the patent draft..."
-                    />
+                      <div className="flex-1 overflow-y-auto">
+                        {disclosure.ai_analysis ? (
+                          <div className="space-y-4 text-sm">
+                            {/* Summary */}
+                            {disclosure.ai_analysis.summary && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-1">Summary</h3>
+                                <p className="text-neutral-600">{disclosure.ai_analysis.summary}</p>
+                              </div>
+                            )}
+
+                            {/* Technical Assessment */}
+                            {disclosure.ai_analysis.technical_assessment && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-2">Technical Assessment</h3>
+                                <div className="space-y-2">
+                                  {disclosure.ai_analysis.technical_assessment.innovation_level && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Innovation Level</p>
+                                      <p className="text-neutral-700">{disclosure.ai_analysis.technical_assessment.innovation_level}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.technical_assessment.technical_complexity && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Technical Complexity</p>
+                                      <p className="text-neutral-700">{disclosure.ai_analysis.technical_assessment.technical_complexity}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.technical_assessment.key_innovations && disclosure.ai_analysis.technical_assessment.key_innovations.length > 0 && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Key Innovations</p>
+                                      <ul className="list-disc list-inside text-neutral-700">
+                                        {disclosure.ai_analysis.technical_assessment.key_innovations.map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Commercial Value */}
+                            {disclosure.ai_analysis.commercial_value && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-2">Commercial Value</h3>
+                                <div className="space-y-2">
+                                  {disclosure.ai_analysis.commercial_value.market_potential && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Market Potential</p>
+                                      <p className="text-neutral-700">{disclosure.ai_analysis.commercial_value.market_potential}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.commercial_value.competitive_advantage && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Competitive Advantage</p>
+                                      <p className="text-neutral-700">{disclosure.ai_analysis.commercial_value.competitive_advantage}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.commercial_value.estimated_value_assessment && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Value Assessment</p>
+                                      <p className="text-neutral-700">{disclosure.ai_analysis.commercial_value.estimated_value_assessment}</p>
+                                      {disclosure.ai_analysis.commercial_value.reasoning && (
+                                        <p className="text-neutral-600 mt-1 text-xs italic">{disclosure.ai_analysis.commercial_value.reasoning}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Claims Analysis */}
+                            {disclosure.ai_analysis.claims_analysis && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-2">Claims Analysis</h3>
+                                <div className="space-y-2">
+                                  <div className="p-2 bg-neutral-50 rounded">
+                                    <p className="text-xs text-neutral-500 mb-1">Claim Scope</p>
+                                    <p className="text-neutral-700">{disclosure.ai_analysis.claims_analysis.claim_scope || 'N/A'}</p>
+                                  </div>
+                                  {disclosure.ai_analysis.claims_analysis.key_limitations && disclosure.ai_analysis.claims_analysis.key_limitations.length > 0 && (
+                                    <div className="p-2 bg-neutral-50 rounded">
+                                      <p className="text-xs text-neutral-500 mb-1">Key Limitations</p>
+                                      <ul className="list-disc list-inside text-neutral-700">
+                                        {disclosure.ai_analysis.claims_analysis.key_limitations.map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Risk Assessment */}
+                            {disclosure.ai_analysis.risk_assessment && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-2">Risk Assessment</h3>
+                                <div className="space-y-2">
+                                  {disclosure.ai_analysis.risk_assessment.invalidation_risk && (
+                                    <div className="p-2 bg-red-50 rounded">
+                                      <p className="text-xs text-red-500 mb-1">Invalidation Risk</p>
+                                      <p className="text-red-700">{disclosure.ai_analysis.risk_assessment.invalidation_risk}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.risk_assessment.potential_challenges && disclosure.ai_analysis.risk_assessment.potential_challenges.length > 0 && (
+                                    <div className="p-2 bg-red-50 rounded">
+                                      <p className="text-xs text-red-500 mb-1">Potential Challenges</p>
+                                      <ul className="list-disc list-inside text-red-700">
+                                        {disclosure.ai_analysis.risk_assessment.potential_challenges.map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Strategic Insights */}
+                            {disclosure.ai_analysis.strategic_insights && (
+                              <div>
+                                <h3 className="font-medium text-neutral-900 mb-2">Strategic Insights</h3>
+                                <div className="space-y-2">
+                                  {disclosure.ai_analysis.strategic_insights.licensing_potential && (
+                                    <div className="p-2 bg-emerald-50 rounded">
+                                      <p className="text-xs text-emerald-500 mb-1">Licensing Potential</p>
+                                      <p className="text-emerald-700">{disclosure.ai_analysis.strategic_insights.licensing_potential}</p>
+                                    </div>
+                                  )}
+                                  {disclosure.ai_analysis.strategic_insights.recommended_actions && disclosure.ai_analysis.strategic_insights.recommended_actions.length > 0 && (
+                                    <div className="p-2 bg-emerald-50 rounded">
+                                      <p className="text-xs text-emerald-500 mb-1">Recommended Actions</p>
+                                      <ul className="list-disc list-inside text-emerald-700">
+                                        {disclosure.ai_analysis.strategic_insights.recommended_actions.map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full text-center py-8">
+                            <svg className="w-12 h-12 text-neutral-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <p className="text-neutral-500 text-sm mb-1">No analysis yet</p>
+                            <p className="text-neutral-400 text-xs">Click "Analyze Patent" to generate AI analysis</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="px-6 py-4 bg-white border border-neutral-200 rounded-xl">
-                      <HighlightableText
-                        text={patentDraft}
-                        comments={comments}
-                        onTextSelect={handleTextSelection}
-                        onHighlightClick={handleHighlightClick}
-                        className="font-mono text-sm text-neutral-700 leading-relaxed"
-                      />
-                    </div>
+                  /* NEW_DISCLOSURE type: Show draft editor */
+                  <div className="card h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-sm font-medium text-neutral-700">Patent Draft</h2>
+                        {lastSaved && isEditMode && (
+                          <span className="text-xs text-neutral-400">• Saved {lastSaved.toLocaleTimeString()}</span>
+                        )}
 
-                    {/* Comment on Selection Dialog */}
-                    {showCommentDialog && (
-                      <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200">
-                        <div className="flex items-start justify-between mb-2">
-                          <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
+                        {/* Mode Toggle */}
+                        <div className="flex items-center gap-1 bg-neutral-100 rounded-lg p-1">
                           <button
                             onClick={() => {
+                              setIsEditMode(true)
                               setShowCommentDialog(false)
-                              setSelectedText('')
-                              setCommentContent('')
                             }}
-                            className="text-neutral-400 hover:text-neutral-600"
+                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                              isEditMode
+                                ? 'bg-white text-navy-700 font-medium shadow-sm'
+                                : 'text-neutral-600 hover:text-neutral-900'
+                            }`}
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setIsEditMode(false)}
+                            className={`px-3 py-1 text-xs rounded transition-colors ${
+                              !isEditMode
+                                ? 'bg-white text-navy-700 font-medium shadow-sm'
+                                : 'text-neutral-600 hover:text-neutral-900'
+                            }`}
+                          >
+                            Comment
                           </button>
                         </div>
-                        <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
-                          <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
-                          <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
-                        </div>
-                        <textarea
-                          value={commentContent}
-                          onChange={(e) => setCommentContent(e.target.value)}
-                          placeholder="Enter your comment..."
-                          className="input-field w-full min-h-[80px] text-sm mb-2"
-                        />
+                      </div>
+
+                      {isEditMode && (
                         <button
-                          onClick={handleAddComment}
-                          disabled={!commentContent.trim()}
-                          className="btn-primary w-full text-sm"
+                          onClick={handleSaveDocument}
+                          disabled={isSaving}
+                          className="btn-primary text-xs py-1.5 px-3"
                         >
-                          Add Comment
+                          {isSaving ? (
+                            <>
+                              <svg
+                                className="animate-spin -ml-1 mr-1.5 h-3 w-3 text-white inline"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              Saving...
+                            </>
+                          ) : (
+                            'Save'
+                          )}
                         </button>
+                      )}
+                    </div>
+
+                    {/* Document Editor / Comment View */}
+                    {isEditMode ? (
+                      <div className="flex-1 overflow-hidden">
+                        <textarea
+                          ref={textareaRef}
+                          value={patentDraft}
+                          onChange={(e) => setPatentDraft(e.target.value)}
+                          className="w-full h-full px-6 py-4 bg-white border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none font-mono text-sm leading-relaxed"
+                          style={{
+                            fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace",
+                          }}
+                          placeholder="Start editing the patent draft..."
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="px-6 py-4 bg-white border border-neutral-200 rounded-xl">
+                          <HighlightableText
+                            text={patentDraft}
+                            comments={comments}
+                            onTextSelect={handleTextSelection}
+                            onHighlightClick={handleHighlightClick}
+                            className="font-mono text-sm text-neutral-700 leading-relaxed"
+                          />
+                        </div>
+
+                        {/* Comment on Selection Dialog */}
+                        {showCommentDialog && (
+                          <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200">
+                            <div className="flex items-start justify-between mb-2">
+                              <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
+                              <button
+                                onClick={() => {
+                                  setShowCommentDialog(false)
+                                  setSelectedText('')
+                                  setCommentContent('')
+                                }}
+                                className="text-neutral-400 hover:text-neutral-600"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                            <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
+                              <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
+                              <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
+                            </div>
+                            <textarea
+                              value={commentContent}
+                              onChange={(e) => setCommentContent(e.target.value)}
+                              placeholder="Enter your comment..."
+                              className="input-field w-full min-h-[80px] text-sm mb-2"
+                            />
+                            <button
+                              onClick={handleAddComment}
+                              disabled={!commentContent.trim()}
+                              className="btn-primary w-full text-sm"
+                            >
+                              Add Comment
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
-              </div>
+              </>
             )}
 
             {/* AI Chat Assistant */}

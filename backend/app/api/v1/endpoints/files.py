@@ -183,3 +183,37 @@ def delete_file(
     db.commit()
 
     return None
+
+
+@router.get("/{file_id}/preview")
+def preview_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    # Note: No auth for now to allow iframe embedding
+    # In production, use signed URLs or session-based auth
+):
+    """
+    Preview a PDF file inline (for embedding in iframe)
+    """
+    file_record = db.query(File).filter(File.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+
+    # For MVP: Return file from local storage
+    from fastapi.responses import FileResponse
+    file_path = os.path.join(os.getcwd(), "uploads", str(file_record.disclosure_id), file_record.s3_key)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on server")
+
+    # Determine media type
+    media_type = "application/pdf" if file_record.file_extension.lower() == ".pdf" else "application/octet-stream"
+
+    return FileResponse(
+        path=file_path,
+        filename=file_record.original_filename,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"inline; filename=\"{file_record.original_filename}\""
+        }
+    )
