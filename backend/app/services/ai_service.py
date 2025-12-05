@@ -237,6 +237,18 @@ Provide a concise, structured summary in markdown format.
 
             elif self.provider == "gemini":
                 # Gemini uses a different format - need to convert messages
+                # For Gemini, we need to create a new model instance with system instruction
+                import google.generativeai as genai
+
+                # Create model with system instruction if provided
+                if system_prompt:
+                    model = genai.GenerativeModel(
+                        'gemini-2.0-flash',
+                        system_instruction=system_prompt
+                    )
+                else:
+                    model = self.client
+
                 # Build conversation history in Gemini format
                 history = []
                 for msg in messages[:-1]:  # All but the last message
@@ -246,7 +258,7 @@ Provide a concise, structured summary in markdown format.
                     })
 
                 # Start chat with history
-                chat = self.client.start_chat(history=history)
+                chat = model.start_chat(history=history)
 
                 # Send the latest message and get response
                 if messages:
@@ -258,6 +270,117 @@ Provide a concise, structured summary in markdown format.
 
         except Exception as e:
             raise Exception(f"Chat generation failed: {str(e)}")
+
+    def analyze_patent(self, patent_text: str, patent_number: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Analyze a patent document and provide comprehensive insights
+
+        Args:
+            patent_text: Full text extracted from patent PDF
+            patent_number: Optional patent number for reference
+
+        Returns:
+            Dictionary with analysis results including summary, technical assessment,
+            commercial value, and recommendations
+        """
+        prompt = f"""
+Analyze the following patent document and provide a comprehensive analysis.
+
+PATENT NUMBER: {patent_number or "Not provided"}
+
+PATENT TEXT:
+{patent_text[:15000]}  # Limit to ~15k chars to avoid token limits
+
+Please provide a detailed analysis in the following JSON format:
+{{
+  "summary": "A concise 2-3 sentence summary of what this patent covers",
+  "technical_assessment": {{
+    "innovation_level": "Revolutionary/Significant/Incremental/Minimal",
+    "technical_complexity": "High/Medium/Low",
+    "key_innovations": ["innovation 1", "innovation 2", "..."],
+    "technical_field": "Primary field of technology",
+    "implementation_difficulty": "High/Medium/Low"
+  }},
+  "commercial_value": {{
+    "market_potential": "High/Medium/Low",
+    "potential_applications": ["application 1", "application 2", "..."],
+    "competitive_advantage": "Description of competitive advantages",
+    "estimated_value_assessment": "Undervalued/Fairly Valued/Overvalued",
+    "reasoning": "Why this patent might be undervalued or overvalued"
+  }},
+  "prior_art_landscape": {{
+    "novelty_assessment": "Highly Novel/Moderately Novel/Incremental",
+    "similar_technologies": ["technology 1", "technology 2", "..."],
+    "differentiation_factors": ["factor 1", "factor 2", "..."]
+  }},
+  "strategic_insights": {{
+    "licensing_potential": "High/Medium/Low",
+    "enforcement_strength": "Strong/Moderate/Weak",
+    "portfolio_fit": "Core Patent/Supporting Patent/Peripheral",
+    "recommended_actions": ["action 1", "action 2", "..."]
+  }},
+  "claims_analysis": {{
+    "total_claims": 0,
+    "independent_claims": 0,
+    "claim_scope": "Broad/Moderate/Narrow",
+    "key_limitations": ["limitation 1", "limitation 2", "..."]
+  }},
+  "risk_assessment": {{
+    "invalidation_risk": "High/Medium/Low",
+    "design_around_difficulty": "Hard/Moderate/Easy",
+    "potential_challenges": ["challenge 1", "challenge 2", "..."]
+  }}
+}}
+
+Be objective and analytical. If the patent appears undervalued, explain why specifically.
+"""
+
+        try:
+            if self.provider == "openai":
+                response = self.client.chat.completions.create(
+                    model="gpt-4-turbo-preview",  # Use GPT-4 for complex analysis
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert patent analyst with deep expertise in technology assessment, IP valuation, and strategic patent analysis. Provide thorough, objective analysis."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                    response_format={"type": "json_object"}
+                )
+                analysis_text = response.choices[0].message.content
+
+            elif self.provider == "anthropic":
+                response = self.client.messages.create(
+                    model="claude-3-opus-20240229",  # Use Opus for complex analysis
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                )
+                analysis_text = response.content[0].text
+
+            elif self.provider == "gemini":
+                response = self.client.generate_content(prompt)
+                analysis_text = response.text
+
+            # Parse JSON response
+            try:
+                start = analysis_text.find("{")
+                end = analysis_text.rfind("}") + 1
+                if start >= 0 and end > start:
+                    json_str = analysis_text[start:end]
+                    return json.loads(json_str)
+            except json.JSONDecodeError:
+                # Return raw text if JSON parsing fails
+                return {
+                    "summary": analysis_text[:500],
+                    "raw_analysis": analysis_text,
+                    "error": "Failed to parse structured analysis"
+                }
+
+        except Exception as e:
+            raise Exception(f"Patent analysis failed: {str(e)}")
 
 
 # Global AI service instance

@@ -32,6 +32,7 @@ class User(Base):
     disclosures = relationship("Disclosure", back_populates="inventor", foreign_keys="Disclosure.inventor_id")
     assigned_disclosures = relationship("Disclosure", back_populates="assigned_lawyer", foreign_keys="Disclosure.assigned_lawyer_id")
     comments = relationship("Comment", back_populates="author")
+    messages = relationship("Message", back_populates="sender")
     notifications = relationship("Notification", back_populates="user")
 
     def __repr__(self):

@@ -4,8 +4,8 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_active_user, RoleChecker
 from app.models.user import User, UserRole
 from app.models.disclosure import Disclosure, DisclosureStatus
-from app.models.patent_draft import PatentDraft
-from app.schemas import PatentDraftResponse, DraftSectionUpdate, DraftApproval, RevisionRequest
+from app.models.patent_draft import PatentDraft, AIProcessingStatus
+from app.schemas import PatentDraftResponse, DraftSectionUpdate, DraftFullTextUpdate, DraftApproval, RevisionRequest
 
 router = APIRouter()
 
@@ -18,6 +18,7 @@ def get_patent_draft(
 ):
     """
     Get AI-generated patent draft for a disclosure
+    If draft doesn't exist, create a new empty one
     """
     # Check disclosure exists and user has access
     disclosure = db.query(Disclosure).filter(Disclosure.id == disclosure_id).first()
@@ -32,8 +33,18 @@ def get_patent_draft(
 
     # Get draft
     draft = db.query(PatentDraft).filter(PatentDraft.disclosure_id == disclosure_id).first()
+
+    # If draft doesn't exist, create one
     if not draft:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patent draft not yet generated")
+        draft = PatentDraft(
+            disclosure_id=disclosure_id,
+            ai_processing_status=AIProcessingStatus.PENDING,
+            sections={},
+            figure_index={},
+        )
+        db.add(draft)
+        db.commit()
+        db.refresh(draft)
 
     return draft
 
@@ -64,6 +75,36 @@ def update_draft_section(
         draft.sections = {}
 
     draft.sections[section_update.section_name] = section_update.content
+
+    db.commit()
+    db.refresh(draft)
+
+    return draft
+
+
+@router.patch("/{draft_id}/full-text", response_model=PatentDraftResponse)
+def update_draft_full_text(
+    draft_id: int,
+    text_update: DraftFullTextUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.LAWYER, UserRole.ADMIN])),
+):
+    """
+    Update the full text of the patent draft
+
+    Only LAWYER and ADMIN can edit drafts.
+    """
+    draft = db.query(PatentDraft).filter(PatentDraft.id == draft_id).first()
+    if not draft:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+
+    # Check if lawyer is assigned to this disclosure
+    disclosure = db.query(Disclosure).filter(Disclosure.id == draft.disclosure_id).first()
+    if current_user.role == UserRole.LAWYER and disclosure.assigned_lawyer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not assigned to this disclosure")
+
+    # Update the full text
+    draft.full_text = text_update.full_text
 
     db.commit()
     db.refresh(draft)

@@ -107,11 +107,26 @@ export interface Comment {
   updated_at?: string
   author_name?: string
   author_role?: string
+
+  // Text selection fields
+  selected_text?: string
+  selection_start?: number
+  selection_end?: number
 }
 
 export interface CommentCreate {
   content: string
   parent_comment_id?: number
+
+  // Text selection fields (optional)
+  selected_text?: string
+  selection_start?: number
+  selection_end?: number
+}
+
+// Thread comment with replies
+export interface CommentThread extends Comment {
+  replies: CommentThread[]
 }
 
 // File types

@@ -5,7 +5,7 @@ from app.core.database import Base
 
 
 class Comment(Base):
-    """Comments on disclosures (supports threading)"""
+    """Comments on disclosures (supports threading and text selection)"""
     __tablename__ = "comments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -19,6 +19,11 @@ class Comment(Base):
 
     # Threading support (for replies)
     parent_comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
+
+    # Text selection support (for highlighting)
+    selected_text = Column(Text, nullable=True)  # The text that was highlighted
+    selection_start = Column(Integer, nullable=True)  # Start position in document
+    selection_end = Column(Integer, nullable=True)  # End position in document
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

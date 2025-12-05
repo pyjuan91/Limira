@@ -2,8 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { disclosureService } from '@/services/disclosureService'
-import { commentService } from '@/services/commentService'
+import { commentService, messageService, Message } from '@/services/commentService'
+import { draftService, PatentDraft } from '@/services/draftService'
 import { Disclosure, Comment } from '@/types'
+import HighlightableText from '@/components/HighlightableText'
+import CommentThread from '@/components/CommentThread'
+import Sidebar, { SidebarTool } from '@/components/layout/Sidebar'
+import SharedFiles from '@/components/common/SharedFiles'
+import VideoChat from '@/components/common/VideoChat'
 
 // Helper function to generate AI patent template from disclosure
 const generatePatentTemplate = (disclosure: Disclosure): string => {
@@ -73,16 +79,27 @@ export default function InventorDisclosureDetail() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Patent draft (read-only)
+  // Sidebar navigation
+  const [activeTool, setActiveTool] = useState<SidebarTool>('draft')
+
+  // Patent draft (read-only, from database)
+  const [draft, setDraft] = useState<PatentDraft | null>(null)
   const [patentDraft, setPatentDraft] = useState('')
 
-  // Text selection for commenting
+  // Comments with text selection
+  const [comments, setComments] = useState<Comment[]>([])
   const [selectedText, setSelectedText] = useState('')
+  const [selectionStart, setSelectionStart] = useState<number | null>(null)
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
   const [showCommentDialog, setShowCommentDialog] = useState(false)
   const [commentContent, setCommentContent] = useState('')
 
-  // Chat with attorney
-  const [comments, setComments] = useState<Comment[]>([])
+  // Comment thread popup
+  const [activeCommentId, setActiveCommentId] = useState<number | null>(null)
+  const [commentThreadPosition, setCommentThreadPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  // Chat with attorney (using messages, not comments)
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -90,14 +107,27 @@ export default function InventorDisclosureDetail() {
   useEffect(() => {
     if (id) {
       loadDisclosure()
+      loadMessages()
       loadComments()
+
+      // Poll for new messages, comments, and draft updates every 5 seconds
+      const pollingInterval = setInterval(() => {
+        loadMessages()
+        loadComments()
+        loadDraft()
+      }, 5000)
+
+      // Cleanup interval on unmount
+      return () => {
+        clearInterval(pollingInterval)
+      }
     }
   }, [id])
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [comments])
+  }, [messages])
 
   const loadDisclosure = async () => {
     if (!id) return
@@ -106,13 +136,55 @@ export default function InventorDisclosureDetail() {
       const data = await disclosureService.getById(parseInt(id))
       setDisclosure(data)
 
-      // Generate AI patent template
-      const template = generatePatentTemplate(data)
-      setPatentDraft(template)
+      // Try to load existing draft from database
+      try {
+        const draftData = await draftService.getDraft(parseInt(id))
+        setDraft(draftData)
+
+        // Use full_text if available, otherwise generate template
+        if (draftData.full_text) {
+          setPatentDraft(draftData.full_text)
+        } else {
+          const template = generatePatentTemplate(data)
+          setPatentDraft(template)
+        }
+      } catch (draftErr) {
+        // If draft doesn't exist, generate template
+        const template = generatePatentTemplate(data)
+        setPatentDraft(template)
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load disclosure')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadDraft = async () => {
+    if (!id) return
+
+    try {
+      const draftData = await draftService.getDraft(parseInt(id))
+      setDraft(draftData)
+
+      // Update draft text if available
+      if (draftData.full_text) {
+        setPatentDraft(draftData.full_text)
+      }
+    } catch (err: any) {
+      // Draft might not exist yet
+      console.error('Failed to load draft:', err)
+    }
+  }
+
+  const loadMessages = async () => {
+    if (!id) return
+
+    try {
+      const data = await messageService.getMessages(parseInt(id))
+      setMessages(data)
+    } catch (err: any) {
+      console.error('Failed to load messages:', err)
     }
   }
 
@@ -127,26 +199,22 @@ export default function InventorDisclosureDetail() {
     }
   }
 
-  const handleTextSelection = () => {
-    const selection = window.getSelection()
-    const text = selection?.toString().trim()
-
-    if (text && text.length > 0) {
-      setSelectedText(text)
-      setShowCommentDialog(true)
-    }
+  const handleTextSelection = (text: string, start: number, end: number) => {
+    setSelectedText(text)
+    setSelectionStart(start)
+    setSelectionEnd(end)
+    setShowCommentDialog(true)
   }
 
   const handleAddComment = async () => {
     if (!commentContent.trim() || !id) return
 
     try {
-      const fullComment = selectedText
-        ? `[Comment on: "${selectedText}"]\n\n${commentContent}`
-        : commentContent
-
       await commentService.createComment(parseInt(id), {
-        content: fullComment,
+        content: commentContent,
+        selected_text: selectedText || undefined,
+        selection_start: selectionStart ?? undefined,
+        selection_end: selectionEnd ?? undefined,
       })
 
       // Reload comments
@@ -155,23 +223,48 @@ export default function InventorDisclosureDetail() {
       // Reset
       setCommentContent('')
       setSelectedText('')
+      setSelectionStart(null)
+      setSelectionEnd(null)
       setShowCommentDialog(false)
     } catch (err: any) {
       alert('Failed to add comment: ' + (err.response?.data?.detail || 'Unknown error'))
     }
   }
 
+  const handleHighlightClick = (commentId: number, position: { x: number; y: number }) => {
+    setActiveCommentId(commentId)
+    setCommentThreadPosition(position)
+  }
+
+  const handleReplyToComment = async (parentCommentId: number, content: string) => {
+    if (!id) return
+
+    try {
+      await commentService.createComment(parseInt(id), {
+        content,
+        parent_comment_id: parentCommentId,
+      })
+
+      // Reload comments
+      await loadComments()
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to add reply')
+    }
+  }
+
+  const activeComment = activeCommentId ? comments.find((c) => c.id === activeCommentId) : null
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !id) return
 
     setIsSendingMessage(true)
     try {
-      await commentService.createComment(parseInt(id), {
+      await messageService.sendMessage(parseInt(id), {
         content: newMessage,
       })
 
-      // Reload comments
-      await loadComments()
+      // Reload messages
+      await loadMessages()
 
       // Reset
       setNewMessage('')
@@ -260,156 +353,199 @@ export default function InventorDisclosureDetail() {
         </div>
       </header>
 
-      {/* Main Content - Two Panel Layout */}
-      <main className="flex-1 overflow-hidden max-w-[1800px] mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+      {/* Main Content with Sidebar */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <Sidebar
+          activeTool={activeTool}
+          onToolChange={setActiveTool}
+          availableTools={['draft', 'discussion', 'files', 'video-chat']}
+        />
 
-          {/* Left Panel - Patent Draft (Read-Only with Selection) */}
-          <div className="card flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-200 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-neutral-900">Patent Draft</h2>
-              <span className="text-xs text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
-                Read-Only
-              </span>
-            </div>
-
-            {/* Patent Draft Viewer */}
-            <div
-              className="flex-1 overflow-y-auto bg-white rounded-lg border border-neutral-200 p-6 mt-4"
-              onMouseUp={handleTextSelection}
-            >
-              <pre className="whitespace-pre-wrap font-mono text-sm text-neutral-700 leading-relaxed select-text">
-                {patentDraft}
-              </pre>
-            </div>
-
-            {/* Comment on Selection Dialog */}
-            {showCommentDialog && (
-              <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200 flex-shrink-0">
-                <div className="flex items-start justify-between mb-2">
-                  <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
-                  <button
-                    onClick={() => {
-                      setShowCommentDialog(false)
-                      setSelectedText('')
-                      setCommentContent('')
-                    }}
-                    className="text-neutral-400 hover:text-neutral-600"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-5xl mx-auto h-full">
+            {/* Patent Draft View */}
+            {activeTool === 'draft' && (
+              <div className="card h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between pb-4 border-b border-neutral-200 flex-shrink-0">
+                  <h2 className="text-lg font-semibold text-neutral-900">Patent Draft</h2>
+                  <span className="text-xs text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
+                    Read-Only
+                  </span>
                 </div>
-                <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
-                  <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
+
+                {/* Patent Draft Viewer with Highlights */}
+                <div className="flex-1 overflow-y-auto bg-white rounded-lg border border-neutral-200 p-6 mt-4">
+                  <HighlightableText
+                    text={patentDraft}
+                    comments={comments}
+                    onTextSelect={handleTextSelection}
+                    onHighlightClick={handleHighlightClick}
+                    className="font-mono text-sm text-neutral-700 leading-relaxed"
+                  />
                 </div>
-                <textarea
-                  value={commentContent}
-                  onChange={(e) => setCommentContent(e.target.value)}
-                  placeholder="Enter your comment..."
-                  className="input-field w-full min-h-[80px] text-sm mb-2"
-                />
-                <button
-                  onClick={handleAddComment}
-                  disabled={!commentContent.trim()}
-                  className="btn-primary w-full text-sm"
-                >
-                  Add Comment
-                </button>
+
+                {/* Comment on Selection Dialog */}
+                {showCommentDialog && (
+                  <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200 flex-shrink-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
+                      <button
+                        onClick={() => {
+                          setShowCommentDialog(false)
+                          setSelectedText('')
+                          setCommentContent('')
+                        }}
+                        className="text-neutral-400 hover:text-neutral-600"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
+                      <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
+                      <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
+                    </div>
+                    <textarea
+                      value={commentContent}
+                      onChange={(e) => setCommentContent(e.target.value)}
+                      placeholder="Enter your comment..."
+                      className="input-field w-full min-h-[80px] text-sm mb-2"
+                    />
+                    <button
+                      onClick={handleAddComment}
+                      disabled={!commentContent.trim()}
+                      className="btn-primary w-full text-sm"
+                    >
+                      Add Comment
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Discussion with Attorney */}
+            {activeTool === 'discussion' && (
+              <div className="card h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between pb-4 border-b border-neutral-200 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-neutral-900">Discussion</h2>
+                    <span className="text-xs text-neutral-400">• with Attorney</span>
+                  </div>
+                  <span className="text-xs text-neutral-500">
+                    {messages.length} message{messages.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto space-y-4 mt-4 mb-4">
+                  {messages.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <p className="text-neutral-600 text-sm">No messages yet</p>
+                      <p className="text-neutral-500 text-xs mt-1">Start a conversation with your attorney</p>
+                    </div>
+                  ) : (
+                    messages.map((message) => {
+                      const isCurrentUser = message.sender_id === user?.id
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[75%] rounded-2xl px-4 py-3 ${
+                              isCurrentUser
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-neutral-100 text-neutral-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className={`text-xs font-medium ${isCurrentUser ? 'text-primary-100' : 'text-neutral-600'}`}>
+                                {message.sender_name || 'Unknown'}
+                              </p>
+                              <span className={`text-xs ${isCurrentUser ? 'text-primary-200' : 'text-neutral-500'}`}>
+                                {formatTimestamp(message.created_at)}
+                              </span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Message Input */}
+                <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
+                      placeholder="Type a message..."
+                      className="input-field flex-1"
+                      disabled={isSendingMessage}
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={!newMessage.trim() || isSendingMessage}
+                      className="btn-primary px-6"
+                    >
+                      {isSendingMessage ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Shared Files */}
+            {activeTool === 'files' && id && (
+              <div className="card h-full p-6">
+                <SharedFiles disclosureId={parseInt(id)} />
+              </div>
+            )}
+
+            {/* Video Chat */}
+            {activeTool === 'video-chat' && id && (
+              <div className="card h-full p-6">
+                <VideoChat disclosureId={parseInt(id)} />
               </div>
             )}
           </div>
-
-          {/* Right Panel - Chat with Attorney */}
-          <div className="card flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-200 flex-shrink-0">
-              <h2 className="text-lg font-semibold text-neutral-900">Discussion with Attorney</h2>
-              <span className="text-xs text-neutral-500">
-                {comments.length} message{comments.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto space-y-4 mt-4 mb-4">
-              {comments.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                  </div>
-                  <p className="text-neutral-600 text-sm">No messages yet</p>
-                  <p className="text-neutral-500 text-xs mt-1">Start a conversation with your attorney</p>
-                </div>
-              ) : (
-                comments.map((comment) => {
-                  const isCurrentUser = comment.author_id === user?.id
-                  return (
-                    <div
-                      key={comment.id}
-                      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                          isCurrentUser
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-neutral-100 text-neutral-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className={`text-xs font-medium ${isCurrentUser ? 'text-primary-100' : 'text-neutral-600'}`}>
-                            {comment.author_name || 'Unknown'}
-                          </p>
-                          <span className={`text-xs ${isCurrentUser ? 'text-primary-200' : 'text-neutral-500'}`}>
-                            {formatTimestamp(comment.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap break-words">{comment.content}</p>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Message Input */}
-            <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  className="input-field flex-1"
-                  disabled={isSendingMessage}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim() || isSendingMessage}
-                  className="btn-primary px-6"
-                >
-                  {isSendingMessage ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
+
+      {/* Comment Thread Popup */}
+      {activeComment && (
+        <CommentThread
+          comment={activeComment}
+          allComments={comments}
+          onReply={handleReplyToComment}
+          onClose={() => setActiveCommentId(null)}
+          position={commentThreadPosition}
+          currentUserId={user?.id}
+        />
+      )}
     </div>
   )
 }

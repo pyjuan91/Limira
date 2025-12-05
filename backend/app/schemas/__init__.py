@@ -10,11 +10,13 @@ from app.schemas.disclosure import (
 )
 from app.schemas.patent_draft import (
     DraftSectionUpdate,
+    DraftFullTextUpdate,
     PatentDraftResponse,
     DraftApproval,
     RevisionRequest,
 )
 from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse, CommentThreadResponse
+from app.schemas.message import MessageCreate, MessageUpdate, MessageResponse
 from app.schemas.file import FileResponse, FileUploadResponse, FileDownloadResponse
 from app.schemas.notification import NotificationResponse, NotificationMarkRead
 
@@ -32,6 +34,7 @@ __all__ = [
     "DisclosureListResponse",
     "DisclosureVersionResponse",
     "DraftSectionUpdate",
+    "DraftFullTextUpdate",
     "PatentDraftResponse",
     "DraftApproval",
     "RevisionRequest",
@@ -39,6 +42,9 @@ __all__ = [
     "CommentUpdate",
     "CommentResponse",
     "CommentThreadResponse",
+    "MessageCreate",
+    "MessageUpdate",
+    "MessageResponse",
     "FileResponse",
     "FileUploadResponse",
     "FileDownloadResponse",

@@ -11,6 +11,11 @@ class DraftSectionUpdate(BaseModel):
     content: Any  # Can be string or list (for claims)
 
 
+class DraftFullTextUpdate(BaseModel):
+    """Update full text of patent draft"""
+    full_text: str
+
+
 # Response schemas
 class PatentDraftResponse(BaseModel):
     """Patent draft data response"""
@@ -18,6 +23,7 @@ class PatentDraftResponse(BaseModel):
     disclosure_id: int
     ai_processing_status: AIProcessingStatus
     sections: Dict[str, Any]
+    full_text: Optional[str] = None
     figure_index: Dict[str, Any]
     ai_model_used: Optional[str] = None
     processing_error: Optional[str] = None

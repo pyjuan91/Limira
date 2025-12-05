@@ -33,6 +33,9 @@ class PatentDraft(Base):
     # }
     sections = Column(JSON, nullable=False, default={})
 
+    # Full text of the patent draft (editable by lawyer)
+    full_text = Column(Text, nullable=True)
+
     # Figure index (organized drawing references)
     # Example: {
     #   "figure_1": {"file_id": 123, "description": "System overview"},

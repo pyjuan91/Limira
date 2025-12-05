@@ -3,7 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { disclosureService } from '@/services/disclosureService'
 import { chatService, ChatMessage as APIChatMessage } from '@/services/chatService'
-import { Disclosure, DisclosureStatus } from '@/types'
+import { commentService, messageService, Message } from '@/services/commentService'
+import { draftService, PatentDraft } from '@/services/draftService'
+import { Disclosure, DisclosureStatus, Comment } from '@/types'
+import HighlightableText from '@/components/HighlightableText'
+import CommentThread from '@/components/CommentThread'
+import Sidebar, { SidebarTool } from '@/components/layout/Sidebar'
+import SharedFiles from '@/components/common/SharedFiles'
+import PatentAnalysis from '@/components/common/PatentAnalysis'
+import VideoChat from '@/components/common/VideoChat'
 
 // Helper function to generate AI patent template from disclosure
 const generatePatentTemplate = (disclosure: Disclosure): string => {
@@ -80,10 +88,30 @@ export default function LawyerDisclosureDetail() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Sidebar navigation
+  const [activeTool, setActiveTool] = useState<SidebarTool>('draft')
+
   // Document editor state
+  const [draft, setDraft] = useState<PatentDraft | null>(null)
   const [patentDraft, setPatentDraft] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Edit/Comment mode toggle
+  const [isEditMode, setIsEditMode] = useState(true)
+
+  // Comments with text selection
+  const [comments, setComments] = useState<Comment[]>([])
+  const [selectedText, setSelectedText] = useState('')
+  const [selectionStart, setSelectionStart] = useState<number | null>(null)
+  const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
+  const [showCommentDialog, setShowCommentDialog] = useState(false)
+  const [commentContent, setCommentContent] = useState('')
+
+  // Comment thread popup
+  const [activeCommentId, setActiveCommentId] = useState<number | null>(null)
+  const [commentThreadPosition, setCommentThreadPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // AI Chat state
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -98,23 +126,45 @@ export default function LawyerDisclosureDetail() {
   const [isAiTyping, setIsAiTyping] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Inventor Chat state
-  const [inventorMessages, setInventorMessages] = useState<ChatMessage[]>([
-    {
-      id: 1,
-      role: 'assistant', // inventor's message
-      content: "Hi! I'm the inventor. Feel free to ask me any questions about the invention disclosure. I'm here to provide clarifications and additional details.",
-      timestamp: new Date(),
-    },
-  ])
+  // Inventor Chat state (using real messages from database)
+  const [inventorMessages, setInventorMessages] = useState<Message[]>([])
   const [inventorInputMessage, setInventorInputMessage] = useState('')
+  const [isSendingInventorMessage, setIsSendingInventorMessage] = useState(false)
   const inventorChatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (id) {
       loadDisclosure()
+      loadInventorMessages()
+      loadComments()
+
+      // Poll for new messages and comments every 5 seconds
+      const pollingInterval = setInterval(() => {
+        loadInventorMessages()
+        loadComments()
+      }, 5000)
+
+      // Cleanup interval on unmount
+      return () => {
+        clearInterval(pollingInterval)
+      }
     }
   }, [id])
+
+  // Auto-save draft after user stops typing (debounced save)
+  useEffect(() => {
+    if (!draft || !patentDraft) return
+
+    // Don't auto-save if textarea is focused (user is actively typing)
+    if (document.activeElement === textareaRef.current) {
+      // Set up debounced save: save 3 seconds after user stops typing
+      const saveTimeout = setTimeout(() => {
+        handleSaveDocument()
+      }, 3000)
+
+      return () => clearTimeout(saveTimeout)
+    }
+  }, [patentDraft, draft])
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
@@ -133,9 +183,23 @@ export default function LawyerDisclosureDetail() {
       const data = await disclosureService.getById(parseInt(id))
       setDisclosure(data)
 
-      // Generate AI patent template
-      const template = generatePatentTemplate(data)
-      setPatentDraft(template)
+      // Try to load existing draft from database
+      try {
+        const draftData = await draftService.getDraft(parseInt(id))
+        setDraft(draftData)
+
+        // Use full_text if available, otherwise generate template
+        if (draftData.full_text) {
+          setPatentDraft(draftData.full_text)
+        } else {
+          const template = generatePatentTemplate(data)
+          setPatentDraft(template)
+        }
+      } catch (draftErr) {
+        // If draft doesn't exist, generate template
+        const template = generatePatentTemplate(data)
+        setPatentDraft(template)
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load disclosure')
     } finally {
@@ -143,14 +207,106 @@ export default function LawyerDisclosureDetail() {
     }
   }
 
+  const loadInventorMessages = async () => {
+    if (!id) return
+
+    try {
+      const data = await messageService.getMessages(parseInt(id))
+      setInventorMessages(data)
+    } catch (err: any) {
+      console.error('Failed to load messages:', err)
+    }
+  }
+
+  const loadComments = async () => {
+    if (!id) return
+
+    try {
+      const data = await commentService.getComments(parseInt(id))
+      setComments(data)
+    } catch (err: any) {
+      console.error('Failed to load comments:', err)
+    }
+  }
+
+  const handleTextSelection = (text: string, start: number, end: number) => {
+    setSelectedText(text)
+    setSelectionStart(start)
+    setSelectionEnd(end)
+    setShowCommentDialog(true)
+  }
+
+  const handleAddComment = async () => {
+    if (!commentContent.trim() || !id) return
+
+    try {
+      await commentService.createComment(parseInt(id), {
+        content: commentContent,
+        selected_text: selectedText || undefined,
+        selection_start: selectionStart ?? undefined,
+        selection_end: selectionEnd ?? undefined,
+      })
+
+      // Reload comments
+      await loadComments()
+
+      // Reset
+      setCommentContent('')
+      setSelectedText('')
+      setSelectionStart(null)
+      setSelectionEnd(null)
+      setShowCommentDialog(false)
+    } catch (err: any) {
+      alert('Failed to add comment: ' + (err.response?.data?.detail || 'Unknown error'))
+    }
+  }
+
+  const handleHighlightClick = (commentId: number, position: { x: number; y: number }) => {
+    setActiveCommentId(commentId)
+    setCommentThreadPosition(position)
+  }
+
+  const handleReplyToComment = async (parentCommentId: number, content: string) => {
+    if (!id) return
+
+    try {
+      await commentService.createComment(parseInt(id), {
+        content,
+        parent_comment_id: parentCommentId,
+      })
+
+      // Reload comments
+      await loadComments()
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to add reply')
+    }
+  }
+
+  const activeComment = activeCommentId ? comments.find((c) => c.id === activeCommentId) : null
+
   const handleSaveDocument = async () => {
+    if (!draft) return
+
     setIsSaving(true)
+    try {
+      // Save cursor position
+      const cursorPosition = textareaRef.current?.selectionStart || 0
 
-    // Simulate API call to save document
-    await new Promise(resolve => setTimeout(resolve, 1000))
+      await draftService.updateFullText(draft.id, patentDraft)
+      setLastSaved(new Date())
 
-    setLastSaved(new Date())
-    setIsSaving(false)
+      // Restore cursor position after save
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = cursorPosition
+          textareaRef.current.selectionEnd = cursorPosition
+        }
+      }, 0)
+    } catch (err: any) {
+      alert('Failed to save document: ' + (err.response?.data?.detail || 'Unknown error'))
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleSendMessage = async () => {
@@ -174,8 +330,9 @@ export default function LawyerDisclosureDetail() {
         content: msg.content,
       }))
 
-      // Call real AI API
-      const responseText = await chatService.sendMessage(apiMessages)
+      // Call real AI API with disclosure context
+      const disclosureId = id ? parseInt(id) : undefined
+      const responseText = await chatService.sendMessage(apiMessages, disclosureId)
 
       const aiMessage: ChatMessage = {
         id: messages.length + 2,
@@ -202,40 +359,24 @@ export default function LawyerDisclosureDetail() {
   }
 
   const handleSendInventorMessage = async () => {
-    if (!inventorInputMessage.trim()) return
+    if (!inventorInputMessage.trim() || !id) return
 
-    // Add attorney's message
-    const attorneyMessage: ChatMessage = {
-      id: inventorMessages.length + 1,
-      role: 'user',
-      content: inventorInputMessage,
-      timestamp: new Date(),
+    setIsSendingInventorMessage(true)
+    try {
+      await messageService.sendMessage(parseInt(id), {
+        content: inventorInputMessage,
+      })
+
+      // Reload messages
+      await loadInventorMessages()
+
+      // Reset
+      setInventorInputMessage('')
+    } catch (err: any) {
+      alert('Failed to send message: ' + (err.response?.data?.detail || 'Unknown error'))
+    } finally {
+      setIsSendingInventorMessage(false)
     }
-    setInventorMessages(prev => [...prev, attorneyMessage])
-    setInventorInputMessage('')
-
-    // Simulate inventor response (fake data)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
-    const inventorResponses = [
-      "Thank you for your question. Let me provide more details about that aspect of the invention...",
-      "That's a great point. The key technical feature here is designed to address scalability concerns we identified during development.",
-      "Yes, we've conducted preliminary testing and the results show significant improvement over existing solutions. I can share the test data if needed.",
-      "The prior art in this field typically uses method A, but our approach with method B provides better efficiency and lower costs.",
-      "I'd be happy to clarify that section. The technical implementation involves three main components that work together...",
-      "We chose this approach after evaluating several alternatives. The main advantage is the reduced complexity while maintaining performance.",
-    ]
-
-    const randomResponse = inventorResponses[Math.floor(Math.random() * inventorResponses.length)]
-
-    const inventorMessage: ChatMessage = {
-      id: inventorMessages.length + 2,
-      role: 'assistant', // inventor
-      content: randomResponse,
-      timestamp: new Date(),
-    }
-
-    setInventorMessages(prev => [...prev, inventorMessage])
   }
 
   const handleLogout = () => {
@@ -286,10 +427,10 @@ export default function LawyerDisclosureDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-navy-50/20 to-neutral-100">
+    <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-navy-50/20 to-neutral-100 flex flex-col">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-neutral-200">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <header className="bg-white/80 backdrop-blur-xl border-b border-neutral-200 flex-shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             {/* Left: Back button and title */}
             <div className="flex items-center gap-4">
@@ -329,188 +470,364 @@ export default function LawyerDisclosureDetail() {
         </div>
       </header>
 
-      {/* Main Content with 3-widget layout */}
-      <main className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-2 grid-rows-2 gap-6 h-[calc(100vh-180px)]">
-          {/* Left Widget - Document Editor */}
-          <div className="col-span-1 row-span-2">
-            <div className="card h-full flex flex-col">
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-medium text-neutral-700">Patent Draft</h2>
-                  {lastSaved && (
-                    <span className="text-xs text-neutral-400">
-                      • Saved {lastSaved.toLocaleTimeString()}
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={handleSaveDocument}
-                  disabled={isSaving}
-                  className="btn-primary text-xs py-1.5 px-3"
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-1.5 h-3 w-3 text-white inline" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Saving...
-                    </>
-                  ) : (
-                    'Save'
-                  )}
-                </button>
-              </div>
+      {/* Main Content with Sidebar */}
+      <main className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <Sidebar
+          activeTool={activeTool}
+          onToolChange={setActiveTool}
+          availableTools={['draft', 'ai-chat', 'discussion', 'files', 'patent-analysis', 'video-chat']}
+        />
 
-              {/* Document Editor */}
-              <div className="flex-1 overflow-hidden">
-                <textarea
-                  value={patentDraft}
-                  onChange={(e) => setPatentDraft(e.target.value)}
-                  className="w-full h-full px-6 py-4 bg-white border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none font-mono text-sm leading-relaxed"
-                  style={{
-                    fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace",
-                  }}
-                  placeholder="Start editing the patent draft..."
-                />
-              </div>
-            </div>
-          </div>
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="max-w-7xl mx-auto h-full">
+            {/* Render content based on active tool */}
+            {activeTool === 'draft' && (
+              <div className="card h-full flex flex-col">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-medium text-neutral-700">Patent Draft</h2>
+                    {lastSaved && isEditMode && (
+                      <span className="text-xs text-neutral-400">• Saved {lastSaved.toLocaleTimeString()}</span>
+                    )}
 
-          {/* Top Right Widget - AI Chat Assistant */}
-          <div className="col-span-1">
-            <div className="card h-full flex flex-col overflow-hidden">
-              {/* Header - Fixed */}
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200 flex-shrink-0">
-                <h2 className="text-sm font-medium text-neutral-700">Drafting Assistant</h2>
-              </div>
-
-              {/* Chat Messages - Scrollable */}
-              <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                        message.role === 'user'
-                          ? 'bg-navy-700 text-white'
-                          : 'bg-neutral-100 text-neutral-900'
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-line">{message.content}</p>
-                      <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-navy-200' : 'text-neutral-500'}`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                    {/* Mode Toggle */}
+                    <div className="flex items-center gap-1 bg-neutral-100 rounded-lg p-1">
+                      <button
+                        onClick={() => {
+                          setIsEditMode(true)
+                          setShowCommentDialog(false)
+                        }}
+                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                          isEditMode
+                            ? 'bg-white text-navy-700 font-medium shadow-sm'
+                            : 'text-neutral-600 hover:text-neutral-900'
+                        }`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setIsEditMode(false)}
+                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                          !isEditMode
+                            ? 'bg-white text-navy-700 font-medium shadow-sm'
+                            : 'text-neutral-600 hover:text-neutral-900'
+                        }`}
+                      >
+                        Comment
+                      </button>
                     </div>
                   </div>
-                ))}
 
-                {isAiTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-neutral-100 text-neutral-900 rounded-2xl px-4 py-3">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
+                  {isEditMode && (
+                    <button
+                      onClick={handleSaveDocument}
+                      disabled={isSaving}
+                      className="btn-primary text-xs py-1.5 px-3"
+                    >
+                      {isSaving ? (
+                        <>
+                          <svg
+                            className="animate-spin -ml-1 mr-1.5 h-3 w-3 text-white inline"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        'Save'
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Document Editor / Comment View */}
+                {isEditMode ? (
+                  <div className="flex-1 overflow-hidden">
+                    <textarea
+                      ref={textareaRef}
+                      value={patentDraft}
+                      onChange={(e) => setPatentDraft(e.target.value)}
+                      className="w-full h-full px-6 py-4 bg-white border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-navy-500 focus:border-transparent resize-none font-mono text-sm leading-relaxed"
+                      style={{
+                        fontFamily: "'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace",
+                      }}
+                      placeholder="Start editing the patent draft..."
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="px-6 py-4 bg-white border border-neutral-200 rounded-xl">
+                      <HighlightableText
+                        text={patentDraft}
+                        comments={comments}
+                        onTextSelect={handleTextSelection}
+                        onHighlightClick={handleHighlightClick}
+                        className="font-mono text-sm text-neutral-700 leading-relaxed"
+                      />
                     </div>
+
+                    {/* Comment on Selection Dialog */}
+                    {showCommentDialog && (
+                      <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="text-sm font-medium text-neutral-900">Add Comment on Selection</p>
+                          <button
+                            onClick={() => {
+                              setShowCommentDialog(false)
+                              setSelectedText('')
+                              setCommentContent('')
+                            }}
+                            className="text-neutral-400 hover:text-neutral-600"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="mb-3 p-2 bg-white rounded border border-neutral-200">
+                          <p className="text-xs text-neutral-500 mb-1">Selected text:</p>
+                          <p className="text-sm text-neutral-700 italic">"{selectedText}"</p>
+                        </div>
+                        <textarea
+                          value={commentContent}
+                          onChange={(e) => setCommentContent(e.target.value)}
+                          placeholder="Enter your comment..."
+                          className="input-field w-full min-h-[80px] text-sm mb-2"
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          disabled={!commentContent.trim()}
+                          className="btn-primary w-full text-sm"
+                        >
+                          Add Comment
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-                <div ref={chatEndRef} />
               </div>
+            )}
 
-              {/* Chat Input - Fixed at bottom */}
-              <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Ask about patent drafting, legal terms, or research..."
-                    className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
-                    disabled={isAiTyping}
-                  />
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={isAiTyping || !inputMessage.trim()}
-                    className="bg-purple-600 hover:bg-purple-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
+            {/* AI Chat Assistant */}
+            {activeTool === 'ai-chat' && (
+              <div className="card h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200 flex-shrink-0">
+                  <h2 className="text-sm font-medium text-neutral-700">Drafting Assistant</h2>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Bottom Right Widget - Inventor Chat */}
-          <div className="col-span-1">
-            <div className="card h-full flex flex-col overflow-hidden">
-              {/* Header - Fixed */}
-              <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-medium text-neutral-700">Discussion</h2>
-                  <span className="text-xs text-neutral-400">
-                    • with Inventor
-                  </span>
-                </div>
-              </div>
-
-              {/* Chat Messages - Scrollable */}
-              <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
-                {inventorMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                {/* Chat Messages - Scrollable */}
+                <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
+                  {messages.map((message) => (
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                        message.role === 'user'
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-neutral-100 text-neutral-900'
-                      }`}
+                      key={message.id}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <p className="text-sm whitespace-pre-line">{message.content}</p>
-                      <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-emerald-100' : 'text-neutral-500'}`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                      <div
+                        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                          message.role === 'user' ? 'bg-navy-700 text-white' : 'bg-neutral-100 text-neutral-900'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-line">{message.content}</p>
+                        <p className={`text-xs mt-1 ${message.role === 'user' ? 'text-navy-200' : 'text-neutral-500'}`}>
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <div ref={inventorChatEndRef} />
-              </div>
+                  ))}
 
-              {/* Chat Input - Fixed at bottom */}
-              <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={inventorInputMessage}
-                    onChange={(e) => setInventorInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendInventorMessage()}
-                    placeholder="Ask the inventor about the disclosure..."
-                    className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-                  />
-                  <button
-                    onClick={handleSendInventorMessage}
-                    disabled={!inventorInputMessage.trim()}
-                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                    </svg>
-                  </button>
+                  {isAiTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-neutral-100 text-neutral-900 rounded-2xl px-4 py-3">
+                        <div className="flex gap-1">
+                          <div
+                            className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '0ms' }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '150ms' }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-neutral-400 rounded-full animate-bounce"
+                            style={{ animationDelay: '300ms' }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Chat Input - Fixed at bottom */}
+                <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                      placeholder="Ask about patent drafting, legal terms, or research..."
+                      className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                      disabled={isAiTyping}
+                    />
+                    <button
+                      onClick={handleSendMessage}
+                      disabled={isAiTyping || !inputMessage.trim()}
+                      className="bg-purple-600 hover:bg-purple-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Inventor Discussion */}
+            {activeTool === 'discussion' && (
+              <div className="card h-full flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-200 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-medium text-neutral-700">Discussion</h2>
+                    <span className="text-xs text-neutral-400">• with Inventor</span>
+                  </div>
+                </div>
+
+                {/* Chat Messages - Scrollable */}
+                <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
+                  {inventorMessages.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-neutral-500 text-sm">No messages yet</p>
+                      <p className="text-neutral-400 text-xs mt-1">Start a conversation with the inventor</p>
+                    </div>
+                  ) : (
+                    inventorMessages.map((message) => {
+                      const isCurrentUser = message.sender_id === user?.id
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                              isCurrentUser ? 'bg-emerald-600 text-white' : 'bg-neutral-100 text-neutral-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <p
+                                className={`text-xs font-medium ${
+                                  isCurrentUser ? 'text-emerald-100' : 'text-neutral-600'
+                                }`}
+                              >
+                                {message.sender_name || 'Unknown'}
+                              </p>
+                              <p className={`text-xs ${isCurrentUser ? 'text-emerald-200' : 'text-neutral-500'}`}>
+                                {new Date(message.created_at).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                            </div>
+                            <p className="text-sm whitespace-pre-line">{message.content}</p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                  <div ref={inventorChatEndRef} />
+                </div>
+
+                {/* Chat Input - Fixed at bottom */}
+                <div className="border-t border-neutral-200 pt-4 flex-shrink-0">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={inventorInputMessage}
+                      onChange={(e) => setInventorInputMessage(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSendInventorMessage()}
+                      placeholder="Ask the inventor about the disclosure..."
+                      className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                    />
+                    <button
+                      onClick={handleSendInventorMessage}
+                      disabled={!inventorInputMessage.trim() || isSendingInventorMessage}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl transition-colors"
+                    >
+                      {isSendingInventorMessage ? (
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Shared Files */}
+            {activeTool === 'files' && id && (
+              <div className="card h-full p-6">
+                <SharedFiles disclosureId={parseInt(id)} />
+              </div>
+            )}
+
+            {/* Patent Analysis */}
+            {activeTool === 'patent-analysis' && (
+              <div className="card h-full p-6">
+                <PatentAnalysis />
+              </div>
+            )}
+
+            {/* Video Chat */}
+            {activeTool === 'video-chat' && id && (
+              <div className="card h-full p-6">
+                <VideoChat disclosureId={parseInt(id)} />
+              </div>
+            )}
           </div>
         </div>
       </main>
+
+      {/* Comment Thread Popup */}
+      {activeComment && (
+        <CommentThread
+          comment={activeComment}
+          allComments={comments}
+          onReply={handleReplyToComment}
+          onClose={() => setActiveCommentId(null)}
+          position={commentThreadPosition}
+          currentUserId={user?.id}
+        />
+      )}
     </div>
   )
 }

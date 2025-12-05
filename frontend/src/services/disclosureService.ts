@@ -30,4 +30,9 @@ export const disclosureService = {
     const response = await api.get<User[]>('/users/lawyers')
     return response.data
   },
+
+  async updateStatus(id: number, status: string): Promise<Disclosure> {
+    const response = await api.patch<Disclosure>(`/disclosures/${id}/status`, { status })
+    return response.data
+  },
 }

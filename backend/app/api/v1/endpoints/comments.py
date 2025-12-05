@@ -73,6 +73,9 @@ def create_comment(
         author_id=current_user.id,
         content=comment_data.content,
         parent_comment_id=comment_data.parent_comment_id,
+        selected_text=comment_data.selected_text,
+        selection_start=comment_data.selection_start,
+        selection_end=comment_data.selection_end,
     )
 
     db.add(new_comment)

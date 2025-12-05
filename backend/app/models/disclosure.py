@@ -15,12 +15,25 @@ class DisclosureStatus(str, enum.Enum):
     APPROVED = "APPROVED"
 
 
+class DisclosureType(str, enum.Enum):
+    """Type of disclosure"""
+    NEW_DISCLOSURE = "NEW_DISCLOSURE"  # Traditional invention disclosure
+    PATENT_REVIEW = "PATENT_REVIEW"    # Review of existing patent
+
+
 class Disclosure(Base):
     __tablename__ = "disclosures"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     status = Column(SQLEnum(DisclosureStatus), default=DisclosureStatus.DRAFT, nullable=False)
+
+    # Type of disclosure (new invention vs existing patent review)
+    disclosure_type = Column(
+        SQLEnum(DisclosureType),
+        default=DisclosureType.NEW_DISCLOSURE,
+        nullable=False
+    )
 
     # Inventor who created this disclosure
     inventor_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -38,6 +51,11 @@ class Disclosure(Base):
     # }
     content = Column(JSON, nullable=False, default={})
 
+    # For PATENT_REVIEW type: patent number and AI analysis results
+    patent_number = Column(String, nullable=True)  # e.g., "US10,123,456"
+    patent_file_id = Column(Integer, ForeignKey("files.id"), nullable=True)  # Reference to uploaded PDF
+    ai_analysis = Column(JSON, nullable=True)  # AI analysis results
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -49,6 +67,7 @@ class Disclosure(Base):
     patent_draft = relationship("PatentDraft", back_populates="disclosure", uselist=False, cascade="all, delete-orphan")
     files = relationship("File", back_populates="disclosure", cascade="all, delete-orphan")
     comments = relationship("Comment", back_populates="disclosure", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="disclosure", cascade="all, delete-orphan")
     video_sessions = relationship("VideoSession", back_populates="disclosure", cascade="all, delete-orphan")
 
     def __repr__(self):
