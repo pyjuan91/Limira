@@ -119,8 +119,8 @@ export default function UploadPatent() {
               </svg>
             </button>
             <div>
-              <h1 className="text-2xl font-semibold text-neutral-900 tracking-tight">Upload Existing Patent</h1>
-              <p className="text-sm text-neutral-600 mt-1">Submit a patent for review and discussion</p>
+              <h1 className="text-2xl font-semibold text-neutral-900 tracking-tight">Upload Existing Document</h1>
+              <p className="text-sm text-neutral-600 mt-1">Submit a document for review and discussion</p>
             </div>
           </div>
           <div className="flex items-center gap-6">
@@ -148,7 +148,7 @@ export default function UploadPatent() {
             {/* Patent Title */}
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-neutral-700 mb-2">
-                Patent Title <span className="text-red-500">*</span>
+                Title <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -156,13 +156,13 @@ export default function UploadPatent() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="input-field w-full"
-                placeholder="Enter the patent title"
+                placeholder="Enter the title"
                 required
               />
             </div>
 
             {/* Patent Number */}
-            <div>
+            {/* <div>
               <label htmlFor="patentNumber" className="block text-sm font-medium text-neutral-700 mb-2">
                 Patent Number <span className="text-neutral-400">(optional)</span>
               </label>
@@ -174,12 +174,12 @@ export default function UploadPatent() {
                 className="input-field w-full"
                 placeholder="e.g., US10,123,456 or EP1234567"
               />
-            </div>
+            </div> */}
 
             {/* File Upload */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">
-                Patent PDF <span className="text-red-500">*</span>
+                PDF <span className="text-red-500">*</span>
               </label>
               <input
                 type="file"
@@ -213,7 +213,7 @@ export default function UploadPatent() {
                     <svg className="w-12 h-12 text-neutral-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    <p className="text-neutral-600 mb-1">Click to upload patent PDF</p>
+                    <p className="text-neutral-600 mb-1">Click to upload PDF</p>
                     <p className="text-sm text-neutral-400">PDF files up to 50MB</p>
                   </>
                 )}
@@ -284,7 +284,7 @@ export default function UploadPatent() {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    Upload Patent
+                    Upload Document
                   </>
                 )}
               </button>
